@@ -26,7 +26,9 @@ AddressSanitizer/UBSan in a couple of minutes:
 powershell -File test\host\run.ps1
 ```
 
-The result must end with `0 failures`. Hardware testing only makes sense on a build that passes.
+The result must end with `0 failures`. Then check interoperability with Dire Wolf in every modem
+mode (`powershell -File test\host\interop.ps1`): every TX row must read 100/100. Hardware testing
+only makes sense on a build that passes both.
 
 ---
 

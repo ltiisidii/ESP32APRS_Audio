@@ -5,11 +5,14 @@
 #include <string>
 #include <vector>
 
+// Same values as the firmware's enum ModemType (modem.h). Note: the web setting
+// config.modem_type uses another numbering (0=300, 1=1200, 2=V.23, 3=9600), mapped by afskSetModem().
 enum HostModem
 {
-    HOST_MODEM_1200 = 1,
-    HOST_MODEM_300 = 0,
-    HOST_MODEM_9600 = 3,
+    HOST_MODEM_1200 = 0, // MODEM_1200, Bell 202 1200/2200 Hz
+    HOST_MODEM_V23 = 1,  // MODEM_1200_V23, 1300/2100 Hz
+    HOST_MODEM_300 = 2,  // MODEM_300, 1600/1800 Hz (HF)
+    HOST_MODEM_9600 = 3, // MODEM_9600, G3RUH
 };
 
 struct DecodedPacket
