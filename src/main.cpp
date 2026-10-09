@@ -122,7 +122,14 @@ TaskHandle_t mainDisplayHandle;
 #endif
 
 #include <Wire.h>
-#ifndef __XTENSA__
+// Define Wire1 only where the Wire library doesn't (same condition as Wire.h); ESP32-C6 already
+// has it and failed to link with "multiple definition of Wire1"
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)
+#define FRAMEWORK_HAS_WIRE1 (SOC_I2C_NUM > 1)
+#else
+#define FRAMEWORK_HAS_WIRE1 (SOC_HP_I2C_NUM > 1)
+#endif
+#if !defined(__XTENSA__) && !FRAMEWORK_HAS_WIRE1
 TwoWire Wire1 = TwoWire(1);
 #endif
 #ifdef OLED
