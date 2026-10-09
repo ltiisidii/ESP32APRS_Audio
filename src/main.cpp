@@ -3553,16 +3553,13 @@ void setup()
 
     LED_Status(255, 255, 255);
 
-    if (!LITTLEFS.exists("/default.cfg"))
+    if (!loadConfigurationWithBackup("/default.cfg", config))
     {
         log_d("Factory Default");
         defaultConfig();
-        saveConfiguration("/default.cfg", config);
-    }
-    else
-    {
-        if (!loadConfiguration("/default.cfg", config))
-            defaultConfig();
+        // Only create the file on a fresh filesystem; keep a corrupt one for inspection
+        if (!LITTLEFS.exists("/default.cfg") && !LITTLEFS.exists("/default.cfg" CFG_BAK_SUFFIX))
+            saveConfiguration("/default.cfg", config);
     }
 
     //setCpuFrequencyMhz(config.cpuFreq);

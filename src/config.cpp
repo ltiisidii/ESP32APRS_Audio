@@ -544,29 +544,69 @@ bool saveConfiguration(const char *filename, const Configuration &config)
     doc["msgRetry"] = config.msg_retry;
     doc["msgInterval"] = config.msg_interval;
 
-    // Serialize JSON to file
-    File file = LITTLEFS.open(filename, FILE_WRITE);
-    if (file)
+    // Atomic save: never truncate the live file. A power cut while writing used to leave a
+    // truncated JSON -> factory defaults (NOCALL, default WiFi) -> station unreachable.
+    //   1. write <file>.tmp and verify it parses back
+    //   2. <file> -> <file>.bak (previous good config)
+    //   3. <file>.tmp -> <file>
+    // At boot loadConfigurationWithBackup() falls back to <file>.bak.
+    String tmpName = String(filename) + CFG_TMP_SUFFIX;
+    String bakName = String(filename) + CFG_BAK_SUFFIX;
+
+    size_t expected = measureJson(doc);
+    File file = LITTLEFS.open(tmpName, FILE_WRITE);
+    if (!file)
     {
-        int8_t adcEnBak=adcEn;
-        int8_t dacEnBak=dacEn;
-        //adcEn=-1;
-        //dacEn=-1;
-        
-        //delay(500);
-        if (serializeJson(doc, file) == 0)
-        {
-            log_d("Failed to write to file");
-        }else{
-            log_d("Write file configuration susses.");
-        }
-        // Close the file
-        file.close();
-        delay(100);
-        //adcEn=1;
-        dacEn=0;
+        log_e("Config save: can't create %s", tmpName.c_str());
+        return false;
     }
+    size_t written = serializeJson(doc, file);
+    file.close();
     doc.clear();
+    if (written == 0 || written != expected)
+    {
+        log_e("Config save: write failed (%u/%u bytes)", (unsigned)written, (unsigned)expected);
+        LITTLEFS.remove(tmpName);
+        return false;
+    }
+
+    file = LITTLEFS.open(tmpName, FILE_READ);
+    if (!file || file.size() != expected)
+    {
+        log_e("Config save: verify failed, size mismatch");
+        if (file)
+            file.close();
+        LITTLEFS.remove(tmpName);
+        return false;
+    }
+    JsonDocument check;
+    DeserializationError err = deserializeJson(check, file);
+    file.close();
+    if (err)
+    {
+        log_e("Config save: verify failed (%s)", err.c_str());
+        LITTLEFS.remove(tmpName);
+        return false;
+    }
+
+    if (LITTLEFS.exists(filename))
+    {
+        if (LITTLEFS.exists(bakName))
+            LITTLEFS.remove(bakName);
+        if (!LITTLEFS.rename(filename, bakName))
+        {
+            log_e("Config save: can't rename %s to %s", filename, bakName.c_str());
+            LITTLEFS.remove(tmpName);
+            return false;
+        }
+    }
+    if (!LITTLEFS.rename(tmpName, filename))
+    {
+        log_e("Config save: can't rename %s to %s", tmpName.c_str(), filename);
+        LITTLEFS.rename(bakName, filename); // put the previous config back
+        return false;
+    }
+    log_d("Write file configuration success (%u bytes).", (unsigned)written);
     return true;
 }
 
@@ -605,7 +645,7 @@ bool loadConfiguration(const char *filename, Configuration &config)
         config.tx_timeslot = doc["txTimeSlot"] | 2000;
         config.synctime = doc["syncTime"];
         config.timeZone = doc["timeZone"];
-        strlcpy(config.ntp_host, doc["ntpHost"], sizeof(config.ntp_host));
+        strlcpy(config.ntp_host, doc["ntpHost"] | "pool.ntp.org", sizeof(config.ntp_host));
         config.wifi_mode = doc["WiFiMode"];
         config.wifi_power = doc["WiFiPwr"];
         config.wifi_ap_ch = doc["WiFiAPCH"];
@@ -1077,6 +1117,25 @@ bool loadConfiguration(const char *filename, Configuration &config)
     else
     {
         log_d("Can't load %s file.", filename);
+    }
+    return false;
+}
+
+// Loads <filename>, or <filename>.bak if the main file is missing/corrupt
+bool loadConfigurationWithBackup(const char *filename, Configuration &config)
+{
+    if (loadConfiguration(filename, config))
+        return true;
+
+    String bakName = String(filename) + CFG_BAK_SUFFIX;
+    log_e("Config %s missing or corrupt, trying %s", filename, bakName.c_str());
+    if (loadConfiguration(bakName.c_str(), config))
+    {
+        // Restore the main file. Remove the corrupt one first so the save doesn't rotate it
+        // into .bak over the good backup.
+        LITTLEFS.remove(filename);
+        saveConfiguration(filename, config);
+        return true;
     }
     return false;
 }
