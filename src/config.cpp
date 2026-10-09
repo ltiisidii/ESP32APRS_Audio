@@ -645,18 +645,18 @@ bool loadConfiguration(const char *filename, Configuration &config)
         config.tx_timeslot = doc["txTimeSlot"] | 2000;
         config.synctime = doc["syncTime"];
         config.timeZone = doc["timeZone"];
-        strlcpy(config.ntp_host, doc["ntpHost"] | "pool.ntp.org", sizeof(config.ntp_host));
+        strlcpy(config.ntp_host, doc["ntpHost"] | DEFAULT_NTP_HOST, sizeof(config.ntp_host));
         config.wifi_mode = doc["WiFiMode"];
         config.wifi_power = doc["WiFiPwr"];
         config.wifi_ap_ch = doc["WiFiAPCH"];
-        strlcpy(config.wifi_ap_ssid, doc["WiFiAP_SSID"] | "ESP32LoRa", sizeof(config.wifi_ap_ssid));
-        strlcpy(config.wifi_ap_pass, doc["WiFiAP_PASS"] | "aprsthnetwork", sizeof(config.wifi_ap_pass));
+        strlcpy(config.wifi_ap_ssid, doc["WiFiAP_SSID"] | DEFAULT_AP_SSID, sizeof(config.wifi_ap_ssid));
+        strlcpy(config.wifi_ap_pass, doc["WiFiAP_PASS"] | DEFAULT_AP_PASS, sizeof(config.wifi_ap_pass));
         // log_d("Load WiFiAP: SSID=%s Pass=%s",config.wifi_ap_ssid,config.wifi_ap_pass);
         for (int i = 0; i < 5; i++)
         {
             config.wifi_sta[i].enable = doc["WiFiSTA"][i * 3];
-            strlcpy(config.wifi_sta[i].wifi_ssid, doc["WiFiSTA"][(i * 3) + 1] | "APRSTH", sizeof(config.wifi_sta[i].wifi_ssid));
-            strlcpy(config.wifi_sta[i].wifi_pass, doc["WiFiSTA"][(i * 3) + 2] | "aprsthnetwork", sizeof(config.wifi_sta[i].wifi_pass));
+            strlcpy(config.wifi_sta[i].wifi_ssid, doc["WiFiSTA"][(i * 3) + 1] | "", sizeof(config.wifi_sta[i].wifi_ssid));
+            strlcpy(config.wifi_sta[i].wifi_pass, doc["WiFiSTA"][(i * 3) + 2] | "", sizeof(config.wifi_sta[i].wifi_pass));
             // if(config.wifi_sta[i].enable)
             // log_d("Load WiFiSTA[%i]: SSID=%s Pass=%s",i,config.wifi_sta[i].wifi_ssid,config.wifi_sta[i].wifi_pass);
         }

@@ -1626,15 +1626,16 @@ void defaultConfig()
     config.cpuFreq = 160;
     #endif
     config.synctime = true;
-    config.timeZone = 7;
+    config.timeZone = -3; // Argentina (UTC-3)
     config.tx_timeslot = 2000; // ms
 
     config.wifi_mode = WIFI_AP_STA_FIX;
     config.wifi_power = 74; // WIFI_POWER_18.5dBm
     config.wifi_ap_ch = 6;
-    config.wifi_sta[0].enable = true;
-    sprintf(config.wifi_sta[0].wifi_ssid, "APRSTH");
-    sprintf(config.wifi_sta[0].wifi_pass, "aprsthnetwork");
+    // No default upstream network: configure it from the web UI through the own AP
+    config.wifi_sta[0].enable = false;
+    config.wifi_sta[0].wifi_ssid[0] = 0;
+    config.wifi_sta[0].wifi_pass[0] = 0;
     for (int i = 1; i < 5; i++)
     {
         config.wifi_sta[i].enable = false;
@@ -1642,7 +1643,7 @@ void defaultConfig()
         config.wifi_sta[i].wifi_pass[0] = 0;
     }
     sprintf(config.wifi_ap_ssid, "ESP32APRS_Audio");
-    sprintf(config.wifi_ap_pass, "aprsthnetwork");
+    sprintf(config.wifi_ap_pass, DEFAULT_AP_PASS); // change it after the first login
 
     // Blutooth
     config.bt_slave = false;
@@ -1731,7 +1732,7 @@ void defaultConfig()
     config.audio_hpf = false;
     config.audio_lpf = false;
     config.preamble = 3;
-    sprintf(config.ntp_host, "aprs.nakhonthai.net");
+    sprintf(config.ntp_host, DEFAULT_NTP_HOST);
 
     // IGATE
     config.igate_bcn = false;
@@ -1746,14 +1747,14 @@ void defaultConfig()
     config.aprs_ssid = 1;
     config.aprs_port = 14580;
     sprintf(config.aprs_mycall, "NOCALL");
-    sprintf(config.aprs_host, "aprs.nakhonthai.net");
+    sprintf(config.aprs_host, DEFAULT_APRS_HOST);
     memset(config.aprs_passcode, 0, sizeof(config.aprs_passcode));
     sprintf(config.aprs_moniCall, "%s-%d", config.aprs_mycall, config.aprs_ssid);
     sprintf(config.aprs_filter, "m/10");
     //--Position
     config.igate_gps = false;
-    config.igate_lat = 13.7555;
-    config.igate_lon = 100.4930;
+    config.igate_lat = DEFAULT_LAT;
+    config.igate_lon = DEFAULT_LON;
     config.igate_alt = 0;
     config.igate_interval = 600;
     sprintf(config.igate_symbol, "A&");
@@ -1761,7 +1762,7 @@ void defaultConfig()
     memset(config.igate_phg, 0, sizeof(config.igate_phg));
     config.igate_path = 8;
     sprintf(config.igate_comment, "");
-    sprintf(config.igate_status, "https://github.com/nakhonthai/ESP32APRS_Audio");
+    sprintf(config.igate_status, DEFAULT_STATUS);
     config.igate_sts_interval = 1800;
 
     // DIGI REPEATER
@@ -1775,8 +1776,8 @@ void defaultConfig()
     config.digi_path = 8;
     //--Position
     config.digi_gps = false;
-    config.digi_lat = 13.7555;
-    config.digi_lon = 100.4930;
+    config.digi_lat = DEFAULT_LAT;
+    config.digi_lon = DEFAULT_LON;
     config.digi_alt = 0;
     config.digi_interval = 600;
     config.igate_timestamp = false;
@@ -1786,7 +1787,7 @@ void defaultConfig()
     sprintf(config.digi_symbol, "A#");
     memset(config.digi_phg, 0, sizeof(config.digi_phg));
     sprintf(config.digi_comment, "");
-    sprintf(config.digi_status, "https://github.com/nakhonthai/ESP32APRS_Audio");
+    sprintf(config.digi_status, DEFAULT_STATUS);
     config.digi_sts_interval = 1800;
 
     // Tracker
@@ -1803,8 +1804,8 @@ void defaultConfig()
 
     //--Position
     config.trk_gps = false;
-    config.trk_lat = 13.7555;
-    config.trk_lon = 100.4930;
+    config.trk_lat = DEFAULT_LAT;
+    config.trk_lon = DEFAULT_LON;
     config.trk_alt = 0;
     config.trk_interval = 600;
     // Smart beacon
@@ -1826,7 +1827,7 @@ void defaultConfig()
     sprintf(config.trk_mycall, "NOCALL");
     sprintf(config.trk_comment, "");
     memset(config.trk_item, 0, sizeof(config.trk_item));
-    sprintf(config.trk_status, "https://github.com/nakhonthai/ESP32APRS_Audio");
+    sprintf(config.trk_status, DEFAULT_STATUS);
     config.trk_sts_interval = 1800;
 
     // WX
@@ -1840,8 +1841,8 @@ void defaultConfig()
     sprintf(config.wx_comment, "WX MODE");
     memset(config.wx_object, 0, sizeof(config.wx_object));
     config.wx_gps = false;
-    config.wx_lat = 13.7555;
-    config.wx_lon = 100.4930;
+    config.wx_lat = DEFAULT_LAT;
+    config.wx_lon = DEFAULT_LON;
     config.wx_alt = 0;
     config.wx_interval = 600;
     config.wx_flage = 0;
@@ -1931,7 +1932,7 @@ config.oled_enable = true;
     config.rx_display = true;
 
     // afsk,TNC
-    sprintf(config.ntp_host, "ntp.nakhonthai.net");
+    sprintf(config.ntp_host, DEFAULT_NTP_HOST);
 
     sprintf(config.path[0], "WIDE1-1");
     sprintf(config.path[1], "WIDE1-1,WIDE2-1");
@@ -1941,7 +1942,7 @@ config.oled_enable = true;
     // VPN Wireguard
     config.vpn = false;
     config.wg_port = 51820;
-    sprintf(config.wg_peer_address, "vpn.nakhonthai.net");
+    config.wg_peer_address[0] = 0; // no default VPN server
     sprintf(config.wg_local_address, "192.168.1.2");
     sprintf(config.wg_netmask_address, "255.255.255.0");
     sprintf(config.wg_gw_address, "192.168.1.1");
@@ -2264,7 +2265,7 @@ config.oled_enable = true;
     config.log = 0;
 #ifdef MQTT
     config.en_mqtt = false;
-    sprintf(config.mqtt_host, "mqtt.nakhonthai.net");
+    config.mqtt_host[0] = 0; // no default MQTT broker
     char strCID[13];
     uint64_t chipid = ESP.getEfuseMac();
     sprintf(strCID, "%04X%08X", (uint16_t)(chipid >> 32), (uint32_t)chipid);
