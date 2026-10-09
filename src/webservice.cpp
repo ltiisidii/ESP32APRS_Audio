@@ -1150,11 +1150,12 @@ void event_lastHeard(bool gethtml)
 	localtime_r(&timeNow, &tmNow);
 //strcat(webString, "  { time: \"21:54:23\", icon: \"91-1.png\", callsign: \"HS5TQA-7\", path: \"RF: WIDE1-1\", dx: 0.0, packet: 2, audio: -19.6 },\n");
 	strcpy(html, "[");
+	char pkgRaw[512];
 	for (int i = 0; i < PKGLISTSIZE; i++)
 	{
 		if (i >= PKGLISTSIZE)
 			break;
-		pkgListType pkg = getPkgList(i);
+		pkgListType pkg = getPkgList(i, pkgRaw, sizeof(pkgRaw));
 		if (pkg.time > 0)
 		{
 			// if (pkg.raw == nullptr || pkg.length == 0)
@@ -7118,7 +7119,7 @@ void handle_igate(AsyncWebServerRequest *request)
 			html = "Save config failed.";
 			request->send(501, "text/html", html); // Not Implemented
 		}
-		aprsClient.stop();
+		aprsIsStop();
 	}
 	else if (request->hasArg("commitIGATEfilter"))
 	{

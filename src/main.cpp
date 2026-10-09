@@ -277,6 +277,25 @@ uint64_t autoResetTimeout = 0;
 // cppQueue PacketBuffer(sizeof(AX25Msg), 5, IMPLEMENTATION); // Instantiate queue
 #ifdef OLED
 cppQueue dispBuffer(300, 5, IMPLEMENTATION);
+// dispBuffer is pushed from taskAPRS/taskNetwork and popped by the display: guard it, and always
+// push a NUL-terminated 300-byte copy (push(line.c_str()) read 300 bytes past shorter strings)
+static portMUX_TYPE dispMux = portMUX_INITIALIZER_UNLOCKED;
+void dispQueuePush(const char *line)
+{
+    char buf[300];
+    strlcpy(buf, line, sizeof(buf));
+    portENTER_CRITICAL(&dispMux);
+    dispBuffer.push(buf);
+    portEXIT_CRITICAL(&dispMux);
+}
+bool dispQueuePop(char *buf) // buf: 300 bytes
+{
+    portENTER_CRITICAL(&dispMux);
+    bool ok = dispBuffer.pop(buf);
+    portEXIT_CRITICAL(&dispMux);
+    buf[299] = 0;
+    return ok;
+}
 cppQueue queTxDisp(sizeof(txDisp), 5, IMPLEMENTATION); // Instantiate queue
 
 void pushTxDisp(uint8_t ch, const char *name, char *info)
@@ -2585,49 +2604,106 @@ uint16_t pkgType(const char *raw)
 uint16_t TNC2Raw[PKGLISTSIZE];
 int raw_count = 0, raw_idx_rd = 0, raw_idx_rw = 0;
 
+static portMUX_TYPE tnc2RawMux = portMUX_INITIALIZER_UNLOCKED;
+
 int pushTNC2Raw(int raw)
 {
   if (raw < 0)
     return -1;
-  if (raw_count > PKGLISTSIZE)
+  portENTER_CRITICAL(&tnc2RawMux);
+  if (raw_count >= PKGLISTSIZE) // was "> PKGLISTSIZE": one push too many overwrote unread entries
+  {
+    portEXIT_CRITICAL(&tnc2RawMux);
     return -1;
+  }
   if (++raw_idx_rw >= PKGLISTSIZE)
     raw_idx_rw = 0;
   TNC2Raw[raw_idx_rw] = raw;
-  raw_count++;
-  return raw_count;
+  int cnt = ++raw_count;
+  portEXIT_CRITICAL(&tnc2RawMux);
+  return cnt;
 }
 
 int popTNC2Raw(int &ret)
 {
-  String raw = "";
-  int idx = 0;
+  portENTER_CRITICAL(&tnc2RawMux);
   if (raw_count <= 0)
+  {
+    portEXIT_CRITICAL(&tnc2RawMux);
     return -1;
+  }
   if (++raw_idx_rd >= PKGLISTSIZE)
     raw_idx_rd = 0;
-  idx = TNC2Raw[raw_idx_rd];
+  int idx = TNC2Raw[raw_idx_rd];
   if (idx < PKGLISTSIZE)
     ret = idx;
-  if (raw_count > 0)
-    raw_count--;
-  return raw_count;
+  int cnt = --raw_count;
+  portEXIT_CRITICAL(&tnc2RawMux);
+  return cnt;
 }
 
-pkgListType getPkgList(int idx)
+// Returns a copy of entry idx. pkgList[idx].raw can be reallocated by taskAPRS as soon as the
+// lock is released, so the raw text is copied into rawBuf under the lock and the copy's raw
+// points to rawBuf (NULL when no buffer is given).
+pkgListType getPkgList(int idx, char *rawBuf, size_t rawLen)
 {
     pkgListType ret;
-    psramLock();
     memset(&ret, 0, sizeof(pkgListType));
-    if (idx < PKGLISTSIZE)
-        memcpy(&ret, &pkgList[idx], sizeof(pkgListType));
+    if (idx < 0 || idx >= PKGLISTSIZE)
+        return ret;
+    psramLock();
+    memcpy(&ret, &pkgList[idx], sizeof(pkgListType));
+    if (rawBuf != NULL && rawLen > 0)
+    {
+        rawBuf[0] = 0;
+        if (pkgList[idx].raw != NULL)
+            strlcpy(rawBuf, pkgList[idx].raw, rawLen);
+        ret.raw = rawBuf;
+    }
+    else
+    {
+        ret.raw = NULL;
+    }
     psramUnlock();
+    ret.calsign[sizeof(ret.calsign) - 1] = 0;
     return ret;
+}
+
+// Store the raw packet text in entry i, growing its buffer when needed. Caller holds psramLock().
+// (The old code reallocated a reused entry without updating currentLength, so a later longer
+// packet was written past the end of the block -> heap corruption.)
+static void pkgListSetRaw(int i, const char *raw)
+{
+    size_t need = strlen(raw) + 1;
+    if (pkgList[i].raw == NULL || pkgList[i].currentLength < need)
+    {
+#ifdef BOARD_HAS_PSRAM
+        char *p = (char *)ps_realloc(pkgList[i].raw, need);
+#else
+        char *p = (char *)realloc(pkgList[i].raw, need);
+#endif
+        if (p == NULL)
+        {
+            log_e("pkgList: out of memory, raw truncated");
+            if (pkgList[i].raw == NULL)
+            {
+                pkgList[i].length = 0;
+                pkgList[i].currentLength = 0;
+                return;
+            }
+        }
+        else
+        {
+            pkgList[i].raw = p;
+            pkgList[i].currentLength = need;
+        }
+    }
+    strlcpy(pkgList[i].raw, raw, pkgList[i].currentLength);
+    pkgList[i].length = strlen(pkgList[i].raw) + 1;
 }
 
 int pkgListUpdate(char *call, char *raw, uint16_t type, bool channel, uint16_t audioLvl)
 {
-    size_t len;
     if (*call == 0)
         return -1;
     if (*raw == 0)
@@ -2722,36 +2798,8 @@ int pkgListUpdate(char *call, char *raw, uint16_t type, bool channel, uint16_t a
                 pkgList[i].freqErr = 0;
                 pkgList[i].audio_level = 0;
             }
-            len = strlen(raw);
-            pkgList[i].length = len + 1;
-            if (pkgList[i].raw != NULL)
-            {
-                // Check if reallocation is needed (only if new size is larger)
-                if (pkgList[i].length > pkgList[i].currentLength) {
-                    #ifdef BOARD_HAS_PSRAM
-                    pkgList[i].raw = (char *)ps_realloc(pkgList[i].raw, pkgList[i].length);
-                    #else
-                    pkgList[i].raw = (char *)realloc(pkgList[i].raw, pkgList[i].length);
-                    #endif
-                    pkgList[i].currentLength = pkgList[i].length;
-                }
-            }
-            else
-            {
-                #ifdef BOARD_HAS_PSRAM
-                pkgList[i].raw = (char *)ps_calloc(pkgList[i].length, sizeof(char));
-                #else
-                pkgList[i].raw = (char *)calloc(pkgList[i].length, sizeof(char));
-                #endif
-                pkgList[i].currentLength = pkgList[i].length;
-            }
-            if (pkgList[i].raw)
-            {
-                memset(pkgList[i].raw, 0, pkgList[i].length);
-                memcpy(pkgList[i].raw, raw, len);
-                pkgList[i].raw[len] = 0;
-                log_d("Update: pkgList_idx=%d callsign:%s object:%s", i, callsign, object);
-            }
+            pkgListSetRaw(i, raw);
+            log_d("Update: pkgList_idx=%d callsign:%s object:%s", i, callsign, object);
         }
     }
     else
@@ -2791,32 +2839,11 @@ int pkgListUpdate(char *call, char *raw, uint16_t type, bool channel, uint16_t a
             pkgList[i].audio_level = 0;
         }
         // strcpy(pkgList[i].calsign, callsign);
-        memcpy(pkgList[i].calsign, callsign, strlen(callsign));
-        len = strlen(raw);
-        pkgList[i].length = len + 1;
-        if (pkgList[i].raw != NULL)
-            {
-                #ifdef BOARD_HAS_PSRAM
-                pkgList[i].raw = (char *)ps_realloc(pkgList[i].raw, pkgList[i].length);
-                #else
-                pkgList[i].raw = (char *)realloc(pkgList[i].raw, pkgList[i].length);
-                #endif
-            }
-            else
-            {
-                #ifdef BOARD_HAS_PSRAM
-                pkgList[i].raw = (char *)ps_calloc(pkgList[i].length, sizeof(char));
-                #else
-                pkgList[i].raw = (char *)calloc(pkgList[i].length, sizeof(char));
-                #endif
-            }
-        if (pkgList[i].raw)
-        {
-            memset(pkgList[i].raw, 0, pkgList[i].length);
-            memcpy(pkgList[i].raw, raw, len);
-            pkgList[i].raw[len] = 0;
-            log_d("New: pkgList_idx=%d callsign:%s object:%s", i, callsign, object);
-        }
+        // full clear: memcpy(strlen) left the tail of the previous, longer callsign
+        memset(pkgList[i].calsign, 0, sizeof(pkgList[i].calsign));
+        strlcpy(pkgList[i].calsign, callsign, sizeof(pkgList[i].calsign));
+        pkgListSetRaw(i, raw);
+        log_d("New: pkgList_idx=%d callsign:%s object:%s", i, callsign, object);
     }
     psramUnlock();
     lastHeard_Flag = true;
@@ -2945,8 +2972,7 @@ bool pkgTxSend()
                         txQueue[i].Channel &= ~INET_CHANNEL;
                         psramUnlock();
 
-                        aprsClient.write(infoTmp, lenTmp); // Send binary frame packet to APRS-IS (aprsc)
-                        aprsClient.write("\r\n");           // Send CR LF the end frame packet
+                        aprsIsSendLine(infoTmp, lenTmp); // Send packet to APRS-IS (aprsc)
                         log_d("TX->INET: %s", infoTmp);
 
                         psramLock();
@@ -3407,10 +3433,62 @@ void RF_MODULE_CHECK()
 
 WiFiClient aprsClient;
 
+// aprsClient (WiFiClient) is not thread-safe. It is used by taskNetwork (connect, read, stop),
+// taskAPRS (igate, TX, telemetry), taskSerial and the web server (stop): interleaved writes
+// mixed lines, and stop() during another task's write could crash. Serialize every access.
+static SemaphoreHandle_t aprsIsMutex = NULL;
+
+bool aprsIsLock(TickType_t timeout)
+{
+    if (aprsIsMutex == NULL)
+        return true; // not created yet (early boot, single task)
+    return xSemaphoreTakeRecursive(aprsIsMutex, timeout) == pdTRUE;
+}
+
+void aprsIsUnlock()
+{
+    if (aprsIsMutex != NULL)
+        xSemaphoreGiveRecursive(aprsIsMutex);
+}
+
+// Send one line to APRS-IS (CR LF appended). False when not connected or busy for > 2 s.
+bool aprsIsSendLine(const char *data, size_t len)
+{
+    if (!aprsIsLock(pdMS_TO_TICKS(2000)))
+    {
+        log_e("APRS-IS busy, packet dropped");
+        return false;
+    }
+    bool ok = false;
+    if (aprsClient.connected())
+    {
+        ok = (aprsClient.write((const uint8_t *)data, len) == len);
+        aprsClient.write("\r\n");
+    }
+    aprsIsUnlock();
+    return ok;
+}
+
+bool aprsIsAvailable()
+{
+    aprsIsLock(portMAX_DELAY);
+    bool ret = aprsClient.available();
+    aprsIsUnlock();
+    return ret;
+}
+
+void aprsIsStop()
+{
+    aprsIsLock(portMAX_DELAY);
+    aprsClient.stop();
+    aprsIsUnlock();
+}
+
 boolean APRSConnect()
 {
     // Serial.println("Connect TCP Server");
     String login = "";
+    aprsIsLock(portMAX_DELAY);
     uint8_t con = aprsClient.connected();
     // Serial.println(con);
     if (con <= 0)
@@ -3419,6 +3497,7 @@ boolean APRSConnect()
         {
             log_d("APRS-IS connect to %s:%d failed", config.aprs_host, config.aprs_port);
             aprsClient.stop();
+            aprsIsUnlock();
             return false;
         }
         // ขอเชื่อมต่อกับ aprsc
@@ -3440,6 +3519,7 @@ boolean APRSConnect()
         // Serial.println("Success");
         delay(500);
     }
+    aprsIsUnlock();
     return true;
 }
 
@@ -3891,6 +3971,7 @@ void setup()
         log_d("GNSS disable");
     }
     psramMutex = xSemaphoreCreateMutex();
+    aprsIsMutex = xSemaphoreCreateRecursiveMutex();
 
     log_d("Start Task");
 #ifdef __XTENSA__
@@ -5221,9 +5302,10 @@ void loop()
     {
         timeTask = millis64() + 10000;
         unsigned long upT = (millis() / 1000) - upTimeStamp;
-        convertSecondsToDHMS(nmea, upT);
+        char upTimeStr[40]; // was the global nmea[] buffer, shared with taskGPS
+        convertSecondsToDHMS(upTimeStr, upT);
         log_d("Task process APRS=%iuS\t NETWORK=%iuS\t GPS=%iuS\t SERIAL=%iuS\n", timerAPRS, timerNetwork, timerGPS, timerSerial);
-        log_d("upTime %s Free heap: %s KB \tWiFi:%s ,RSSI:%s dBm", nmea, String((float)ESP.getFreeHeap() / 1000, 1).c_str(), String(WiFi.SSID()).c_str(), String(WiFi.RSSI()).c_str());
+        log_d("upTime %s Free heap: %s KB \tWiFi:%s ,RSSI:%s dBm", upTimeStr, String((float)ESP.getFreeHeap() / 1000, 1).c_str(), String(WiFi.SSID()).c_str(), String(WiFi.RSSI()).c_str());
     }
 
     vTaskDelay(10 / portTICK_PERIOD_MS);
@@ -5372,7 +5454,7 @@ void loop()
             if (millis64() > timeHalfSec)
             {
                 char tnc2[300];
-                dispBuffer.pop(&tnc2);
+                dispQueuePop(tnc2);
                 dispWindow(String(tnc2), 0, false);
                 timeHalfSec = millis64() + (config.dispDelay * 1000);
                 oledSleepTimeout = millis64() + (config.oled_timeout * 1000);
@@ -5529,8 +5611,7 @@ void sendIsPkg(char *raw)
     sprintf(str, "%s-%d>APE32A%s:%s", config.aprs_mycall, config.aprs_ssid, VERSION, raw);
     // client.println(str);
     String tnc2Raw = String(str);
-    if (aprsClient.connected())
-        aprsClient.println(tnc2Raw); // Send packet to Inet
+    aprsIsSendLine(tnc2Raw.c_str(), tnc2Raw.length()); // Send packet to Inet
     if (config.digi_en)
         pkgTxPush(str, strlen(str), 0, RF_CHANNEL);
 }
@@ -5555,8 +5636,7 @@ void sendIsPkgMsg(char *raw)
         sprintf(str, "%s-%d>APE32A::%s:%s", config.aprs_mycall, config.aprs_ssid, call, raw);
 
     String tnc2Raw = String(str);
-    if (aprsClient.connected())
-        aprsClient.println(tnc2Raw); // Send packet to Inet
+    aprsIsSendLine(tnc2Raw.c_str(), tnc2Raw.length()); // Send packet to Inet
 }
 
 void sendTelemetry_0(char *raw, bool header)
@@ -5657,10 +5737,9 @@ void sendTelemetry_0(char *raw, bool header)
     if (config.tlm0_2inet)
     { // TLM SEND TO APRS-IS
 
-        if (aprsClient.connected())
+        if (aprsIsSendLine(str, strlen(str))) // Send packet to Inet
         {
             status.txCount++;
-            aprsClient.printf("%s\r\n", str); // Send packet to Inet
             // pushTxDisp(TXCH_TCP, "TX DIGI POS", sts);
         }
     }
@@ -6390,8 +6469,7 @@ void taskSerial(void *pvParameters)
                     if (config.rf2inet && aprsClient.connected())
                     {
                         // RF->INET
-                        aprsClient.write(&rawP[0], strlen(rawP)); // Send binary frame packet to APRS-IS (aprsc)
-                        aprsClient.write("\r\n");                 // Send CR LF the end frame packet
+                        aprsIsSendLine(rawP, strlen(rawP)); // Send packet to APRS-IS (aprsc)
                         status.rf2inet++;
                         // igateTLM.RF2INET++;
                         // igateTLM.RX++;
@@ -6472,8 +6550,7 @@ void taskSerial(void *pvParameters)
                                 if (config.rf2inet && aprsClient.connected())
                                 {
                                     // RF->INET
-                                    aprsClient.write(&rawP[0], strlen(rawP)); // Send binary frame packet to APRS-IS (aprsc)
-                                    aprsClient.write("\r\n");                 // Send CR LF the end frame packet
+                                    aprsIsSendLine(rawP, strlen(rawP)); // Send packet to APRS-IS (aprsc)
                                     status.rf2inet++;
                                     // igateTLM.RF2INET++;
                                     // igateTLM.RX++;
@@ -7243,7 +7320,7 @@ void taskAPRS(void *pvParameters)
                                     #ifdef GUI_LCD
                                     pushTNC2Raw(idx);
                                     #else
-                                    dispBuffer.push(tnc2.c_str());
+                                    dispQueuePush(tnc2.c_str());
                                     #endif
                                     log_d("RF_putQueueDisp:[pkgList_idx=%d,Type=%d RAW:%s] %s\n", idx, type, call, tnc2.c_str());
                                 }
@@ -8752,16 +8829,18 @@ void taskNetwork(void *pvParameters)
                 {
                     // Half-open TCP (NAT/4G): connected() stays true but nothing arrives
                     log_d("APRS-IS no data for %d s, reconnecting", APRS_IS_RX_TIMEOUT / 1000);
-                    aprsClient.stop();
+                    aprsIsStop();
                     waitISRetry = millis64() + 5000;
                 }
                 else
                 {
-                    if (aprsClient.available())
+                    if (aprsIsAvailable())
                     {
                         lastIsRx = millis();
                         pingTimeout = millis64() + 300000;                // Reset ping timout
-                        String line = aprsClient.readStringUntil('\n'); // อ่านค่าที่ Server ตอบหลับมาทีละบรรทัด
+                        aprsIsLock(portMAX_DELAY);
+                        String line = aprsClient.readStringUntil('\n');
+                        aprsIsUnlock(); // อ่านค่าที่ Server ตอบหลับมาทีละบรรทัด
                         status.isCount++;
                         int start_val = line.indexOf(">", 0); // หาตำแหน่งแรกของ >
                         if (start_val > 3)
@@ -8831,7 +8910,7 @@ void taskNetwork(void *pvParameters)
                                                     int cnt = pushTNC2Raw(idx);
                                                     log_d("INET_putQueueDisp:[pkgList_idx=%d/queue=%d,Type=%d] %s\n", idx, cnt, type, call);
                                                     #else
-                                                    dispBuffer.push(line.c_str());
+                                                    dispQueuePush(line.c_str());
                                                     log_d("INET_putQueueDisp:[pkgList_idx=%d/queue=%d,Type=%d] %s\n", idx, dispBuffer.getCount(), type, call);
                                                     #endif
                                                 }
@@ -11379,14 +11458,15 @@ void pkgLastDisp()
     k = 0;
     for (i = 0; i < PKGLISTSIZE; i++)
     {
-        if (pkgList[i].time > 0)
+        pkgListType pkg = getPkgList(i);
+        if (pkg.time > 0)
         {
             y = 12 + (k * 9);
             display.setCursor(0, y);
-            pkgList[i].calsign[10] = 0;
+            pkg.calsign[10] = 0;
             display.setTextColor(WHITE);
             display.setCursor(0, y);
-            display.printf("%d:%s", i + 1, pkgList[i].calsign);
+            display.printf("%d:%s", i + 1, pkg.calsign);
             k++;
             if (k >= 3)
                 break;
@@ -11423,15 +11503,16 @@ void pkgLastDisp()
     k = 0;
     for (i = 0; i < PKGLISTSIZE; i++)
     {
-        if (pkgList[i].time > 0)
+        pkgListType pkg = getPkgList(i);
+        if (pkg.time > 0)
         {
             y = 18 + (k * 9);
             // display.drawBitmap(3, y, &SYMBOL[0][0], 11, 6, WHITE);
             display.fillRoundRect(2, y, 7, 8, 2, WHITE);
             display.setCursor(3, y);
-            pkgList[i].calsign[10] = 0;
+            pkg.calsign[10] = 0;
             display.setTextColor(BLACK);
-            switch (pkgList[i].type)
+            switch (pkg.type)
             {
             case PKG_OBJECT:
                 display.print("O");
@@ -11460,16 +11541,16 @@ void pkgLastDisp()
             }
             display.setTextColor(WHITE);
             display.setCursor(10, y);
-            display.print(pkgList[i].calsign);
+            display.print(pkg.calsign);
             display.setCursor(126 - 48, y);
-            // display.printf("%02d:%02d:%02d", hour(pkgList[i].time), minute(pkgList[i].time), second(pkgList[i].time));
+            // display.printf("%02d:%02d:%02d", hour(pkg.time), minute(pkg.time), second(pkg.time));
 
-            // time_t tm = pkgList[i].time;
+            // time_t tm = pkg.time;
             struct tm tmstruct;
-            localtime_r(&pkgList[i].time, &tmstruct);
+            localtime_r(&pkg.time, &tmstruct);
             String str = String(tmstruct.tm_hour, DEC) + ":" + String(tmstruct.tm_min, DEC) + ":" + String(tmstruct.tm_sec, DEC);
             display.print(str);
-            // str = String(hour(pkgList[i].time),DEC) + ":" + String(minute(pkgList[i].time), DEC) + ":" + String(second(pkgList[i].time), DEC);
+            // str = String(hour(pkg.time),DEC) + ":" + String(minute(pkg.time), DEC) + ":" + String(second(pkg.time), DEC);
             ////str = String(pkgList[pkgLast_array[i]].time, DEC);
             // x = str.length() * 6;
             // display.setCursor(126 - x, y);
@@ -11500,15 +11581,16 @@ void pkgLastDisp()
     k = 0;
     for (i = 0; i < PKGLISTSIZE; i++)
     {
-        if (pkgList[i].time > 0)
+        pkgListType pkg = getPkgList(i);
+        if (pkg.time > 0)
         {
             y = 18 + (k * 10);
             // display.drawBitmap(3, y, &SYMBOL[0][0], 11, 6, WHITE);
             display.fillRoundRect(2, y, 7, 8, 2, WHITE);
             display.setCursor(3, y);
-            pkgList[i].calsign[10] = 0;
+            pkg.calsign[10] = 0;
             display.setTextColor(BLACK);
-            switch (pkgList[i].type)
+            switch (pkg.type)
             {
             case PKG_OBJECT:
                 display.print("O");
@@ -11537,11 +11619,11 @@ void pkgLastDisp()
             }
             display.setTextColor(WHITE);
             display.setCursor(12, y);
-            display.print(pkgList[i].calsign);
+            display.print(pkg.calsign);
             display.setCursor(158 - 48, y);
 
             struct tm tmstruct;
-            localtime_r(&pkgList[i].time, &tmstruct);
+            localtime_r(&pkg.time, &tmstruct);
             String str = String(tmstruct.tm_hour, DEC) + ":" + String(tmstruct.tm_min, DEC) + ":" + String(tmstruct.tm_sec, DEC);
             display.print(str);
             k++;
@@ -11576,14 +11658,15 @@ void pkgCountDisp()
     k = 0;
     for (i = 0; i < PKGLISTSIZE; i++)
     {
-        if (pkgList[i].time > 0)
+        pkgListType pkg = getPkgList(i);
+        if (pkg.time > 0)
         {
             y = 12 + (k * 9);
             display.setCursor(0, y);
-            pkgList[i].calsign[10] = 0;
+            pkg.calsign[10] = 0;
             display.setTextColor(WHITE);
             display.setCursor(0, y);
-            display.printf("%d:%s", i + 1, pkgList[i].calsign);
+            display.printf("%d:%s", i + 1, pkg.calsign);
             k++;
             if (k >= 3)
                 break;
@@ -11622,16 +11705,17 @@ void pkgCountDisp()
     k = 0;
     for (i = 0; i < PKGLISTSIZE; i++)
     {
-        if (pkgList[i].time > 0)
+        pkgListType pkg = getPkgList(i);
+        if (pkg.time > 0)
         {
             y = 18 + (k * 9);
-            // display.drawBitmapV(2, y-1, &SYMBOL[pkgList[i].symbol][0], 11, 8, WHITE);
-            pkgList[i].calsign[10] = 0;
+            // display.drawBitmapV(2, y-1, &SYMBOL[pkg.symbol][0], 11, 8, WHITE);
+            pkg.calsign[10] = 0;
             display.fillRoundRect(2, y, 7, 8, 2, WHITE);
             display.setCursor(3, y);
-            pkgList[i].calsign[10] = 0;
+            pkg.calsign[10] = 0;
             display.setTextColor(BLACK);
-            switch (pkgList[i].type)
+            switch (pkg.type)
             {
             case PKG_OBJECT:
                 display.print("O");
@@ -11660,8 +11744,8 @@ void pkgCountDisp()
             }
             display.setTextColor(WHITE);
             display.setCursor(10, y);
-            display.print(pkgList[i].calsign);
-            str = String(pkgList[i].pkg, DEC);
+            display.print(pkg.calsign);
+            str = String(pkg.pkg, DEC);
             x = str.length() * 6;
             display.setCursor(126 - x, y);
             display.print(str);
@@ -11691,16 +11775,17 @@ void pkgCountDisp()
     k = 0;
     for (i = 0; i < PKGLISTSIZE; i++)
     {
-        if (pkgList[i].time > 0)
+        pkgListType pkg = getPkgList(i);
+        if (pkg.time > 0)
         {
             y = 18 + (k * 10);
-            // display.drawBitmapV(2, y-1, &SYMBOL[pkgList[i].symbol][0], 11, 8, WHITE);
-            pkgList[i].calsign[10] = 0;
+            // display.drawBitmapV(2, y-1, &SYMBOL[pkg.symbol][0], 11, 8, WHITE);
+            pkg.calsign[10] = 0;
             display.fillRoundRect(2, y, 7, 8, 2, WHITE);
             display.setCursor(3, y);
-            pkgList[i].calsign[10] = 0;
+            pkg.calsign[10] = 0;
             display.setTextColor(BLACK);
-            switch (pkgList[i].type)
+            switch (pkg.type)
             {
             case PKG_OBJECT:
                 display.print("O");
@@ -11729,8 +11814,8 @@ void pkgCountDisp()
             }
             display.setTextColor(WHITE);
             display.setCursor(10, y);
-            display.print(pkgList[i].calsign);
-            str = String(pkgList[i].pkg, DEC);
+            display.print(pkg.calsign);
+            str = String(pkg.pkg, DEC);
             x = str.length() * 6;
             display.setCursor(158 - x, y);
             display.print(str);
