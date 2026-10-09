@@ -76,6 +76,7 @@ static const adc_unit_t unit = ADC_UNIT_1;
 void sample_dac_isr();
 volatile bool hw_afsk_dac_isr = false;
 volatile uint32_t adcIsrCount = 0;  // Diagnostic: counts ADC ISR firings
+volatile uint32_t fifoOverflowCount = 0; // Diagnostic: ADC samples dropped because the FIFO was full
 volatile int fifoSampleCount = 0;   // Diagnostic: snapshot of FIFO count
 
 bool holdADC = false;
@@ -127,7 +128,9 @@ extern float baudRate;  // baudrate
 
 /****************** Ring Buffer gen from DeepSeek *********************/
 //#if defined(CONFIG_IDF_TARGET_ESP32S3)
-#define BUFFER_SIZE 1500
+// ~140 ms of audio at 28.8 kHz (was 1500 = 52 ms): enough slack for the demodulator task
+// to be held off by web page generation or display updates without losing samples.
+#define BUFFER_SIZE 4096
 // #else
 // #define BUFFER_SIZE 770
 // #endif
@@ -723,9 +726,16 @@ void IRAM_ATTR sample_adc_isr()
 
     // RingBuffer_Push(&fifo, adc);
     // if(fifo.head >= BUFFER_SIZE || fifo.head < 0) fifo.head = 0; // Check if head exceeds buffer size
-    fifo.buffer[fifo.head] = adc;
-    fifo.head = (fifo.head + 1) % BUFFER_SIZE; // Wrap around using modulo
-    fifo.count++;
+    if (fifo.count < BUFFER_SIZE) // full: drop the new sample, never overwrite unread ones
+    {
+      fifo.buffer[fifo.head] = adc;
+      fifo.head = (fifo.head + 1) % BUFFER_SIZE; // Wrap around using modulo
+      fifo.count++;
+    }
+    else
+    {
+      fifoOverflowCount++;
+    }
     portEXIT_CRITICAL_ISR(&fifoMux); // ISR end
     // digitalWrite(15,LOW);
     fifo.lock = false;
@@ -1041,6 +1051,11 @@ static bool IRAM_ATTR s_conv_done_cb(adc_continuous_handle_t stAdcHandle, const 
     if (fifo.head >= BUFFER_SIZE || fifo.head < 0)
       RingBuffer_Init(&fifo); // Check if head exceeds buffer size
       //fifo.head = 0; // Check if head exceeds buffer size
+    if (fifo.count >= BUFFER_SIZE) // full: drop the new sample, never overwrite unread ones
+    {
+      fifoOverflowCount++;
+      continue;
+    }
     fifo.buffer[fifo.head] = adcPush;
     fifo.head = (fifo.head + 1) % BUFFER_SIZE; // Wrap around using modulo
     fifo.count++;
@@ -1518,6 +1533,18 @@ long mVsum = 0;
 int mVsumCount = 0;
 uint8_t dcd_cnt = 0;
 bool sqlActiveOld = false;
+
+// True when the ADC is supposed to be producing samples (used by the supervisor's RX check)
+bool AFSK_SamplingExpected(void)
+{
+  if (hw_afsk_dac_isr)
+    return false; // TX: sampling paused
+#if defined(ADC_SAMPLE)
+  if (_sql_pin > -1 && !sqlActive)
+    return false; // original ESP32 stops the ADC timer while the squelch is closed
+#endif
+  return true;
+}
 #define READ_LEN 256
 // uint32_t ret_num = 0;
 // uint8_t resultADC[READ_LEN] = {0};
