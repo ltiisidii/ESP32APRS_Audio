@@ -492,7 +492,11 @@ typedef struct Config_Struct
 
 } Configuration;
 
+#define CFG_TMP_SUFFIX ".tmp"
+#define CFG_BAK_SUFFIX ".bak"
+
 bool saveConfiguration(const char *filename, const Configuration &config);
 bool loadConfiguration(const char *filename, Configuration &config);
+bool loadConfigurationWithBackup(const char *filename, Configuration &config);
 
 #endif
