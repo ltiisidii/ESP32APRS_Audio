@@ -65,11 +65,15 @@ int digiProcess(AX25Msg &Packet)
                     }
                     if (Packet.rpt_flags & (1 << idx))
                         continue;
+                    if (Packet.rpt_count >= AX25_MAX_RPT)
+                        return 0; // path full: inserting our call wrote past rpt_list[]
                     for (j = idx; j < Packet.rpt_count; j++)
                     {
                         if (Packet.rpt_flags & (1 << j))
                             break;
                     }
+                    if (j >= Packet.rpt_count)
+                        j = Packet.rpt_count - 1;
                     // Move current part to next part
                     for (; j >= idx; j--)
                     {
@@ -191,11 +195,15 @@ int digiProcess(AX25Msg &Packet)
             }
             else
             {
+                if (Packet.rpt_count >= AX25_MAX_RPT)
+                    return 0; // path full: inserting our call wrote past rpt_list[]
                 for (j = idx; j < Packet.rpt_count; j++)
                 {
                     if (Packet.rpt_flags & (1 << j))
                         break;
                 }
+                if (j >= Packet.rpt_count)
+                    j = Packet.rpt_count - 1;
                 // Move current part to next part
                 for (; j >= idx; j--)
                 {

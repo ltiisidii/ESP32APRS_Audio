@@ -6822,8 +6822,10 @@ void dispWindow(String line, uint8_t mode, bool filter)
         String src_call = line.substring(0, start_val);
         memset(&aprs, 0, sizeof(pbuf_t));
         aprs.buf_len = 300;
+        if (line.length() > sizeof(aprs.data) - 1) // aprs.data is 300 bytes
+            line.remove(sizeof(aprs.data) - 1);
         aprs.packet_len = line.length();
-        line.toCharArray(&aprs.data[0], aprs.packet_len);
+        memcpy(aprs.data, line.c_str(), line.length()); // toCharArray(len) also dropped the last char
         int start_info = line.indexOf(":", 0);
         int end_ssid = line.indexOf(",", 0);
         int start_dst = line.indexOf(">", 2);
