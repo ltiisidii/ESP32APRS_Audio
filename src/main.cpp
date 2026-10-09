@@ -52,6 +52,7 @@
 #include "handleATCommand.h"
 
 #include "sensor.h"
+#include "supervisor.h"
 
 #include <rom/spi_flash.h>
 #include "FS.h"
@@ -4018,6 +4019,7 @@ void setup()
     }
 
     upTimeStamp = millis() / 1000;
+    supervisorStart();
     autoResetTimeout = millis64() + ((uint64_t)config.reset_timeout * 60000);
 }
 
@@ -6590,8 +6592,10 @@ void taskAPRS(void *pvParameters)
     initInterval = true;
     AFSKInitAct = true;
     log_d("Task APRS has been start");
+    supervisorFeed(SV_TASK_APRS);
     for (;;)
     {
+        supervisorFeed(SV_TASK_APRS);
 
         if (adcEn == 1)
         {
@@ -8041,6 +8045,7 @@ void taskAPRS(void *pvParameters)
 
 void taskAPRSPoll(void *pvParameters)
 {
+    supervisorFeed(SV_TASK_APRS_POLL); // also catches a hang inside AFSK_init()
     vTaskDelay(1000 / portTICK_PERIOD_MS);
     afskSetModem(config.modem_type, config.audio_lpf, config.tx_timeslot, config.preamble * 100, config.fx25_mode);
     afskSetSQL(config.rf_sql_gpio, config.rf_sql_active);
@@ -8060,6 +8065,7 @@ void taskAPRSPoll(void *pvParameters)
 
     for (;;)
     {
+        supervisorFeed(SV_TASK_APRS_POLL);
         if (config.modem_type == 3)
             vTaskDelay(1 / portTICK_PERIOD_MS);
         else
@@ -8567,8 +8573,10 @@ void taskNetwork(void *pvParameters)
     bluetooth_init(); // Initialize Bluetooth if enabled
 #endif
 
+    supervisorFeed(SV_TASK_NETWORK);
     for (;;)
     {
+        supervisorFeed(SV_TASK_NETWORK);
         unsigned long now = millis();
         timeNetwork = now - timeNetworkOld;
         timeNetworkOld = now;

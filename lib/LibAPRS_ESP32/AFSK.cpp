@@ -1016,6 +1016,7 @@ int16_t adcPush;
 //  adc_oneshot_unit_handle_t adc1_handle;
 static bool IRAM_ATTR s_conv_done_cb(adc_continuous_handle_t stAdcHandle, const adc_continuous_evt_data_t *edata, void *user_data)
 {
+  adcIsrCount++; // liveness counter for the supervisor (counted even during TX)
    // Don't fill FIFO during TX — matches sample_adc_isr() gate on original ESP32.
   // Without this, ~33,000 garbage samples accumulate during TX and corrupt
   // the demodulator state when drained, causing permanent RX freeze.
