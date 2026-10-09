@@ -194,6 +194,8 @@ char ax25_encode(ax25frame &frame, char *txt,int size);
 int hdlcFrame(uint8_t *outbuf, size_t outbuf_len, AX25Ctx *ctx, ax25frame *pkg);
 void Ax25TxDelay(uint16_t delay_ms);
 void Ax25TimeSlot(uint16_t ts);
+uint32_t Ax25TxTimeoutMs(void);
+void Ax25TxAbort(void);
 bool Ax25NewRxFrames(void);
 
 #endif /* AX25_H_ */

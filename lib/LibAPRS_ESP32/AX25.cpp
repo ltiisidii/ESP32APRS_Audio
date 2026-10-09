@@ -1138,6 +1138,45 @@ void Ax25TxDelay(uint16_t delay_ms)
 	txDelay = ((float)Ax25Config.txDelayLength / (8.f * 1000.f / ModemGetBaudrate())); //change milliseconds to byte count
 }
 
+/**
+ * @brief Worst-case duration of one transmission (TXDelay + full TX buffer + tail), plus margin
+ * @return Time limit in ms for the PTT time-out timer
+ */
+uint32_t Ax25TxTimeoutMs(void)
+{
+	float baud = ModemGetBaudrate();
+	if (baud < 1.f)
+		baud = 1200.f;
+	// every frame slot full, + flags/FX.25 overhead, + 20% for bit stuffing
+	float payloadMs = (float)FRAME_MAX_COUNT * (AX25_FRAME_MAX_SIZE + 64) * 8.f * 1.2f * 1000.f / baud;
+	return 5000 + Ax25Config.txDelayLength + Ax25Config.txTailLength + (uint32_t)payloadMs;
+}
+
+/**
+ * @brief Abort an ongoing/pending transmission and drop all queued TX frames
+ * @attention Call from task context (not from ISR). Releases PTT via ModemTransmitStop()
+ */
+void Ax25TxAbort(void)
+{
+	DAC_TimerEnable(false); // stop the TX bit ISR before touching its state
+	txStage = TX_STAGE_IDLE;
+	txInitStage = TX_INIT_OFF;
+	txByte = 0;
+	txByteIdx = 0;
+	txBitIdx = 0;
+	txDelayElapsed = 0;
+	txFlagsElapsed = 0;
+	txCrcByteIdx = 0;
+	txBitstuff = 0;
+	txTailElapsed = 0;
+	txCrc = 0xFFFF;
+	txRetries = 0;
+	txFrameTail = txFrameHead;
+	txFrameBufferFull = false;
+	txBufferTail = txBufferHead;
+	ModemTransmitStop();
+}
+
 void Ax25TimeSlot(uint16_t ts)
 {
 	if(ts>0){
