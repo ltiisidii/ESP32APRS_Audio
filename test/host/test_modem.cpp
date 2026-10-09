@@ -72,6 +72,16 @@ TEST(modem300_roundtrip)
         CHECK_EQ_STR(hostTnc2(rx[0]).c_str(), PKT);
 }
 
+TEST(modemV23_roundtrip)
+{
+    hostModemSetup(HOST_MODEM_V23, 0);
+    hostReceive(hostTransmit({PKT}));
+    auto rx = hostReadFrames();
+    CHECK_EQ_INT(rx.size(), 1);
+    if (rx.size() == 1)
+        CHECK_EQ_STR(hostTnc2(rx[0]).c_str(), PKT);
+}
+
 TEST(modem9600_roundtrip)
 {
     hostModemSetup(HOST_MODEM_9600, 0);

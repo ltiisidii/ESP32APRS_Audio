@@ -55,10 +55,10 @@ bool hostReadWav(const char *path, std::vector<float> &samples, uint32_t &rate)
 }
 
 // Low-pass (windowed sinc) + linear interpolation to the demodulator rate
-static std::vector<float> resample(const std::vector<float> &in, double inRate, double outRate)
+static std::vector<float> resample(const std::vector<float> &in, double inRate, double outRate, double cutoffHz)
 {
     const int taps = 63;
-    double fc = std::min(4000.0, outRate * 0.45) / inRate;
+    double fc = std::min(cutoffHz, outRate * 0.45) / inRate;
     std::vector<double> h(taps);
     double sum = 0;
     for (int i = 0; i < taps; i++)
@@ -103,7 +103,9 @@ int hostDecodeWav(const char *path, HostModem modem, bool flat, bool verbose)
     }
     hostModemSetup(modem, 1, flat); // FX.25 RX on, as in the firmware default
     double outRate = (modem == HOST_MODEM_9600) ? 38400.0 : 9600.0;
-    std::vector<float> r = resample(s, rate, outRate);
+    // 4 kHz anti-alias for the AFSK modems; 9600 baud G3RUH needs the full band
+    double cutoff = (modem == HOST_MODEM_9600) ? outRate * 0.45 : 4000.0;
+    std::vector<float> r = resample(s, rate, outRate, cutoff);
     // Full-scale WAV -> +-2048 (12-bit ADC range after DC removal)
     int frames = 0;
     for (size_t i = 0; i < r.size(); i++)
@@ -123,31 +125,97 @@ int hostDecodeWav(const char *path, HostModem modem, bool flat, bool verbose)
     {
         frames++;
         if (verbose)
-            std::printf("%s\n", hostTnc2(p).c_str());
+            std::printf("%8.2f %s\n", r.size() / outRate, hostTnc2(p).c_str());
     }
     return frames;
 }
 
+bool hostWriteWav(const char *path, const std::vector<int16_t> &pcm, uint32_t rate)
+{
+    FILE *fp = std::fopen(path, "wb");
+    if (!fp)
+        return false;
+    uint32_t dataLen = pcm.size() * 2, byteRate = rate * 2, riff = 36 + dataLen;
+    uint8_t hdr[44] = {'R', 'I', 'F', 'F', 0, 0, 0, 0, 'W', 'A', 'V', 'E', 'f', 'm', 't', ' ', 16, 0, 0, 0, 1, 0, 1, 0,
+                       0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 16, 0, 'd', 'a', 't', 'a', 0, 0, 0, 0};
+    std::memcpy(hdr + 4, &riff, 4);
+    std::memcpy(hdr + 24, &rate, 4);
+    std::memcpy(hdr + 28, &byteRate, 4);
+    std::memcpy(hdr + 40, &dataLen, 4);
+    std::fwrite(hdr, 1, 44, fp);
+    std::fwrite(pcm.data(), 2, pcm.size(), fp);
+    std::fclose(fp);
+    return true;
+}
+
+int hostEncodeWav(const char *path, HostModem modem, uint8_t fx25Mode, int count)
+{
+    hostModemSetup(modem, fx25Mode, false);
+    std::vector<int16_t> pcm(38400 / 2, 0); // 0.5 s of silence first
+    for (int i = 0; i < count; i++)
+    {
+        char pkt[128];
+        std::snprintf(pkt, sizeof(pkt), "LU1ABC-9>APE32A,WIDE1-1:>ESP32APRS_Audio TX test %04d", i + 1);
+        auto dac = hostTransmit({pkt});
+        // DAC (0..255 at 38.4 kHz) -> 16-bit PCM, as the radio's modulator input would see it
+        for (uint8_t v : dac)
+            pcm.push_back((int16_t)((v - 127.5) * 160));
+        pcm.insert(pcm.end(), 38400 / 4, 0); // 250 ms between packets
+    }
+    return hostWriteWav(path, pcm, 38400) ? count : -1;
+}
+
 #ifdef WAV_DECODE_MAIN
+static bool parseModem(const char *a, HostModem &m)
+{
+    if (!std::strcmp(a, "300"))
+        m = HOST_MODEM_300;
+    else if (!std::strcmp(a, "1200"))
+        m = HOST_MODEM_1200;
+    else if (!std::strcmp(a, "9600"))
+        m = HOST_MODEM_9600;
+    else if (!std::strcmp(a, "v23"))
+        m = HOST_MODEM_V23;
+    else
+        return false;
+    return true;
+}
+
 int main(int argc, char **argv)
 {
+    if (argc >= 3 && !std::strcmp(argv[1], "--tx"))
+    {
+        // wav_decode --tx <out.wav> [1200|300|9600|v23] [fx25] [count]
+        HostModem m = HOST_MODEM_1200;
+        uint8_t fx25 = 0;
+        int count = 100;
+        for (int i = 3; i < argc; i++)
+        {
+            if (!std::strcmp(argv[i], "fx25"))
+                fx25 = 2;
+            else if (!parseModem(argv[i], m) && std::atoi(argv[i]) > 0)
+                count = std::atoi(argv[i]);
+        }
+        int n = hostEncodeWav(argv[2], m, fx25, count);
+        std::printf("%s: %d frames written\n", argv[2], n);
+        return n < 0;
+    }
     if (argc < 2)
     {
-        std::printf("usage: wav_decode <file.wav> [1200|300|9600] [flat] [-v]\n");
+        std::printf("usage: wav_decode <file.wav> [1200|300|9600|v23] [flat] [-v]\n"
+                    "       wav_decode --tx <out.wav> [1200|300|9600|v23] [fx25] [count]\n");
         return 2;
     }
     HostModem m = HOST_MODEM_1200;
     bool flat = false, verbose = false;
     for (int i = 2; i < argc; i++)
     {
-        if (!std::strcmp(argv[i], "300"))
-            m = HOST_MODEM_300;
-        else if (!std::strcmp(argv[i], "9600"))
-            m = HOST_MODEM_9600;
-        else if (!std::strcmp(argv[i], "flat"))
+        if (!std::strcmp(argv[i], "flat"))
             flat = true;
         else if (!std::strcmp(argv[i], "-v"))
             verbose = true;
+        else
+            parseModem(argv[i], m);
     }
     int n = hostDecodeWav(argv[1], m, flat, verbose);
     if (n < 0)
