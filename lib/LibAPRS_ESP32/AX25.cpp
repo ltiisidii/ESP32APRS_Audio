@@ -118,7 +118,7 @@ static uint8_t txCrcByteIdx = 0; //currently transmitted byte of CRC
 static uint8_t txBitstuff = 0; //bit-stuffing counter
 static uint16_t txTailElapsed; //counter of TXTail bytes already sent
 static uint16_t txCrc = 0xFFFF; //current CRC
-static unsigned long txQuiet = 0; //quit time + current tick value
+static uint64_t txQuiet = 0; //quit time + current tick value
 static uint8_t txRetries = 0; //number of TX retries
 static enum TxInitStage txInitStage; //current TX initialization stage
 static enum TxStage txStage; //current TX stage
@@ -1041,7 +1041,7 @@ void Ax25TransmitBuffer()
 
 	 if((txFrameHead != txFrameTail) || txFrameBufferFull)
 	 {
-	 	txQuiet = (millis() + (Ax25Config.quietTime)); //calculate required delay
+	 	txQuiet = (millis64() + (Ax25Config.quietTime)); //calculate required delay
 	 	txInitStage = TX_INIT_WAITING;
 	 }
 }
@@ -1079,7 +1079,7 @@ void Ax25TransmitCheck(void)
 	 //if(ModemIsTxTestOngoing()) //TX test is enabled, wait for now
 	 //	return;
 
-	 if(txQuiet < millis()) //quit time has elapsed
+	 if(txQuiet < millis64()) //quit time has elapsed
 	 {
 	 	if(!ModemDcdState()) //channel is free
 	 	{
@@ -1097,7 +1097,7 @@ void Ax25TransmitCheck(void)
 	 		}
 	 		else //still trying
 	 		{
-	 			txQuiet = millis() + random(100, 1000); //try again after some random time
+	 			txQuiet = millis64() + random(100, 1000); //try again after some random time
 	 			txRetries++;
 	 		}
 	 	}
@@ -1129,7 +1129,7 @@ void Ax25Init(uint8_t fx25Mode)
 	txDelay = ((float)Ax25Config.txDelayLength / (8.f * 1000.f / ModemGetBaudrate())); //change milliseconds to byte count
 	txTail = ((float)Ax25Config.txTailLength / (8.f * 1000.f / ModemGetBaudrate()));
 	txInitStage == TX_INIT_OFF;
-	txQuiet = (millis() + (Ax25Config.quietTime) + random(10, 200)); //calculate required delay
+	txQuiet = (millis64() + (Ax25Config.quietTime) + random(10, 200)); //calculate required delay
 }
 
 void Ax25TxDelay(uint16_t delay_ms)
@@ -1181,7 +1181,7 @@ void Ax25TimeSlot(uint16_t ts)
 {
 	if(ts>0){
 		Ax25Config.quietTime = ts;	
-		txQuiet = (millis() + (Ax25Config.quietTime) + random(100, 1000)); //calculate required delay
+		txQuiet = (millis64() + (Ax25Config.quietTime) + random(100, 1000)); //calculate required delay
 	}else{
 		txQuiet = 0; //no delay
 	}

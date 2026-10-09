@@ -266,7 +266,7 @@ extern volatile int fifoSampleCount;
 //extern volatile uint32_t frameDecodeCount;
 
 long timeNetwork, timeAprs, timeGui;
-long autoResetTimeout = 0;
+uint64_t autoResetTimeout = 0;
 
 // cppQueue PacketBuffer(sizeof(AX25Msg), 5, IMPLEMENTATION); // Instantiate queue
 #ifdef OLED
@@ -2301,8 +2301,8 @@ config.oled_enable = true;
     config.fx25_mode = 2; // Used modem mode FX.25 RX+TX
 }
 
-unsigned long NTP_Timeout;
-unsigned long pingTimeout;
+uint64_t NTP_Timeout;
+uint64_t pingTimeout;
 
 SemaphoreHandle_t psramMutex = NULL;
 
@@ -2813,7 +2813,7 @@ int pkgListUpdate(char *call, char *raw, uint16_t type, bool channel, uint16_t a
     }
     psramUnlock();
     lastHeard_Flag = true;
-    lastHeardTimeout = millis() + 1000;
+    lastHeardTimeout = millis64() + 1000;
     return i;
 }
 
@@ -3436,12 +3436,12 @@ boolean APRSConnect()
     return true;
 }
 
-long oledSleepTimeout = 0;
+uint64_t oledSleepTimeout = 0;
 bool showDisp = false;
 #ifdef OLED
 RTC_DATA_ATTR bool gps_mode;
 RTC_DATA_ATTR uint8_t curTab;
-int timeHalfSec = 0;
+uint64_t timeHalfSec = 0;
 #endif
 
 void preTransmission()
@@ -3832,7 +3832,7 @@ void setup()
     showDisp = true;
     if (curTab > 7)
         curTab = 6;
-    oledSleepTimeout = millis() + (config.oled_timeout * 1000);
+    oledSleepTimeout = millis64() + (config.oled_timeout * 1000);
 #endif
     // enableLoopWDT();
     // enableCore0WDT();
@@ -3850,7 +3850,7 @@ void setup()
     // // #endif
     //     esp_task_wdt_add(NULL);
 
-    oledSleepTimeout = millis() + (config.oled_timeout * 1000);
+    oledSleepTimeout = millis64() + (config.oled_timeout * 1000);
     AFSKInitAct = false;
     log_d("GNSS config");
     if (config.gnss_enable)
@@ -4021,7 +4021,7 @@ void setup()
     }
 
     upTimeStamp = millis() / 1000;
-    autoResetTimeout = millis() + ((long)config.reset_timeout * 60000);
+    autoResetTimeout = millis64() + ((uint64_t)config.reset_timeout * 60000);
 }
 
 String getTimeStamp()
@@ -5188,10 +5188,10 @@ int packet2Raw(String &tnc2, AX25Msg &Packet)
 
 long sendTimer = 0;
 int btn_count = 0;
-long timeCheck = 0;
+uint64_t timeCheck = 0;
 
-unsigned long timeTask;
-unsigned long timeSec;
+uint64_t timeTask;
+uint64_t timeSec;
 char nmea[100];
 int nmea_idx = 0;
 bool save_mode = false;
@@ -5220,9 +5220,9 @@ void msgBox(String msg)
 uint8_t heapCount = 0;
 void loop()
 {
-    if (millis() > timeTask)
+    if (millis64() > timeTask)
     {
-        timeTask = millis() + 10000;
+        timeTask = millis64() + 10000;
         unsigned long upT = (millis() / 1000) - upTimeStamp;
         convertSecondsToDHMS(nmea, upT);
         log_d("Task process APRS=%iuS\t NETWORK=%iuS\t GPS=%iuS\t SERIAL=%iuS\n", timerAPRS, timerNetwork, timerGPS, timerSerial);
@@ -5256,7 +5256,7 @@ void loop()
     //         else
     //         {
     //             showDisp = true;
-    //             timeSec = timeHalfSec = millis();
+    //             timeSec = timeHalfSec = millis64();
     //             // if (oledSleepTimeout > 0)
     //             //{
     //             curTab++;
@@ -5277,7 +5277,7 @@ void loop()
             if (curTab == 0)
             {
                 showDisp = true;
-                timeSec = timeHalfSec = millis();
+                timeSec = timeHalfSec = millis64();
                 if (gps_mode)
                     gps_mode = false;
                 else
@@ -5354,7 +5354,7 @@ void loop()
                 if (save_mode)
                     save_act = true;
                 showDisp = true;
-                timeSec = timeHalfSec = millis();
+                timeSec = timeHalfSec = millis64();
                 // if (oledSleepTimeout > 0)
                 //{
                 curTab++;
@@ -5372,13 +5372,13 @@ void loop()
     {
         if (dispBuffer.getCount() > 0)
         {
-            if (millis() > timeHalfSec)
+            if (millis64() > timeHalfSec)
             {
                 char tnc2[300];
                 dispBuffer.pop(&tnc2);
                 dispWindow(String(tnc2), 0, false);
-                timeHalfSec = millis() + (config.dispDelay * 1000);
-                oledSleepTimeout = millis() + (config.oled_timeout * 1000);
+                timeHalfSec = millis64() + (config.dispDelay * 1000);
+                oledSleepTimeout = millis64() + (config.oled_timeout * 1000);
             }
         }
         else
@@ -5399,18 +5399,18 @@ void loop()
             }
 
             // Sleep display
-            if (millis() > timeHalfSec)
+            if (millis64() > timeHalfSec)
             {
-                if (millis() > timeSec && timeHalfSec > 0)
+                if (millis64() > timeSec && timeHalfSec > 0)
                 {
-                    timeSec = millis() + 10000;
+                    timeSec = millis64() + 10000;
                     showDisp = true;
                     // timeHalfSec = 0;
-                    // oledSleepTimeout = millis() + (config.oled_timeout * 1000);
+                    // oledSleepTimeout = millis64() + (config.oled_timeout * 1000);
                 }
                 else
                 {
-                    if (millis() > oledSleepTimeout && oledSleepTimeout > 0)
+                    if (millis64() > oledSleepTimeout && oledSleepTimeout > 0)
                     {
                         showDisp = false;
                         timeHalfSec = 0;
@@ -5427,51 +5427,51 @@ void loop()
         if (showDisp)
         {
             showDisp = false;
-            timeHalfSec = millis();
-            // oledSleepTimeout = millis() + (config.oled_timeout * 1000);
+            timeHalfSec = millis64();
+            // oledSleepTimeout = millis64() + (config.oled_timeout * 1000);
             switch (curTab)
             {
             case 1:
                 statisticsDisp();
-                timeSec = millis() + 10000;
+                timeSec = millis64() + 10000;
                 break;
             case 2:
                 pkgLastDisp();
-                timeSec = millis() + 10000;
+                timeSec = millis64() + 10000;
                 break;
             case 3:
                 pkgCountDisp();
-                timeSec = millis() + 10000;
+                timeSec = millis64() + 10000;
                 break;
             case 4:
                 systemDisp();
-                timeSec = millis() + 10000;
+                timeSec = millis64() + 10000;
                 break;
             case 5:
                 radioDisp();
-                timeSec = millis() + 10000;
+                timeSec = millis64() + 10000;
                 break;
             case 6:
                 wifiDisp();
-                timeSec = millis() + 10000;
+                timeSec = millis64() + 10000;
                 break;
             case 7:
                 sensorDisp();
-                timeSec = millis() + 10000;
+                timeSec = millis64() + 10000;
                 break;
             case 0:
                 gpsDisp();
-                timeSec = millis() + 1000;
+                timeSec = millis64() + 1000;
             }
         }
     }
 #endif
 
     // Tick one secound
-    if (millis() > timeCheck)
+    if (millis64() > timeCheck)
     {
         // esp_task_wdt_reset();
-        timeCheck = millis() + 1000;
+        timeCheck = millis64() + 1000;
         #ifdef TTGO_TWR
         VBat = (float)PMU.getBattVoltage() / 1000;
         VBat_Flag = true;
@@ -5499,9 +5499,9 @@ void loop()
         }
         // Serial.println(String(ESP.getFreeHeap()));
 
-        if ((config.reset_timeout > 0) && (millis() > autoResetTimeout))
+        if ((config.reset_timeout > 0) && (millis64() > autoResetTimeout))
         {
-            autoResetTimeout = millis() + (config.reset_timeout * 60000);
+            autoResetTimeout = millis64() + ((uint64_t)config.reset_timeout * 60000);
             log_d("Auto Reset System");
             esp_restart();
         }
@@ -6046,7 +6046,7 @@ WiFiClient gnssClient;
 // WiFiClient tncClient;
 
 extern AsyncWebSocket ws_gnss;
-unsigned long gnssTimeInterval = 0;
+uint64_t gnssTimeInterval = 0;
 
 void taskGPS(void *pvParameters)
 {
@@ -6201,9 +6201,9 @@ void taskGPS(void *pvParameters)
             {
                 if (gps.time.isUpdated())
                 {
-                    if (gnssTimeInterval > millis())
+                    if (millis64() > gnssTimeInterval)
                     {
-                        gnssTimeInterval = millis() + 10000;
+                        gnssTimeInterval = millis64() + 10000;
                         time_t nowTime;
                         time_t timeGps = getGpsTime(); // Local gps time
                         time(&nowTime);
@@ -6546,23 +6546,23 @@ void taskSerial(void *pvParameters)
 }
 
 long timeSlot;
-unsigned long iGatetickInterval;
-unsigned long WxInterval;
+uint64_t iGatetickInterval;
+uint64_t WxInterval;
 bool initInterval = true;
 int trkTlmInvCount = 0;
 int igateTlmInvCount = 0;
 int digiTlmInvCount = 0;
-unsigned long msgInterval = 0;
+uint64_t msgInterval = 0;
 void taskAPRS(void *pvParameters)
 {
     //	long start, stop;
     char sts[50];
-    unsigned long tickInterval = 0;
-    unsigned long DiGiInterval = 0;
+    uint64_t tickInterval = 0;
+    uint64_t DiGiInterval = 0;
 
-    unsigned long igateSTSInterval = 0;
-    unsigned long digiSTSInterval = 0;
-    unsigned long trkSTSInterval = 0;
+    uint64_t igateSTSInterval = 0;
+    uint64_t digiSTSInterval = 0;
+    uint64_t trkSTSInterval = 0;
 
     uint16_t type = 0;
     bool newIGatePkg = false;
@@ -6582,9 +6582,9 @@ void taskAPRS(void *pvParameters)
 
     APRS_setCallsign(config.aprs_mycall, config.aprs_ssid);
     sendTimer = millis() - (config.igate_interval * 1000) + 30000;
-    igateTLM.TeleTimeout = millis() + 60000; // 1Min
+    igateTLM.TeleTimeout = millis64() + 60000; // 1Min
 
-    msgInterval = millis() + 30000;
+    msgInterval = millis64() + 30000;
     timeSlot = millis();
     timeAprs = 0;
     tx_interval = config.trk_interval;
@@ -6646,15 +6646,15 @@ void taskAPRS(void *pvParameters)
             pttOff = false;
             //log_i("[TX-END] PTT released, fifo=%d frames=%u", fifoSampleCount, frameDecodeCount);
         }
-        long now = millis();
+        uint64_t now = millis64();
         // wdtSensorTimer = now;
         // time_t timeStamp;
         // time(&timeStamp);
         if (initInterval)
         {
-            tickInterval = WxInterval = DiGiInterval = igateSTSInterval = iGatetickInterval = digiSTSInterval = trkSTSInterval = millis() + 10000;
-            systemTLM.ParmTimeout = millis() + 20000;
-            systemTLM.TeleTimeout = millis() + 30000;
+            tickInterval = WxInterval = DiGiInterval = igateSTSInterval = iGatetickInterval = digiSTSInterval = trkSTSInterval = millis64() + 10000;
+            systemTLM.ParmTimeout = millis64() + 20000;
+            systemTLM.TeleTimeout = millis64() + 30000;
             initInterval = false;
             tx_interval = config.trk_interval;
             tx_counter = tx_interval - 10;
@@ -6665,7 +6665,7 @@ void taskAPRS(void *pvParameters)
 
         if (now > msgInterval)
         {
-            msgInterval = millis() + config.msg_interval;
+            msgInterval = millis64() + config.msg_interval;
             sendAPRSMessageRetry();
         }
 
@@ -6759,15 +6759,15 @@ void taskAPRS(void *pvParameters)
         { // TRACKER MODE
             if (config.trk_sts_interval > 10)
             {
-                if (millis() > trkSTSInterval)
+                if (millis64() > trkSTSInterval)
                 {
-                    trkSTSInterval = millis() + (config.trk_sts_interval * 1000);
+                    trkSTSInterval = millis64() + (config.trk_sts_interval * 1000);
                     tracker_status(config.trk_status);
                 }
             }
-            if (millis() > tickInterval)
+            if (millis64() > tickInterval)
             {
-                tickInterval = millis() + 1000;
+                tickInterval = millis64() + 1000;
 
                 tx_counter++;
                 // log_d("TRACKER tx_counter=%d\t INTERVAL=%d\n", tx_counter, tx_interval);
@@ -7276,16 +7276,16 @@ void taskAPRS(void *pvParameters)
         {
             if (config.igate_sts_interval > 10)
             {
-                if (millis() > igateSTSInterval)
+                if (millis64() > igateSTSInterval)
                 {
-                    igateSTSInterval = millis() + (config.igate_sts_interval * 1000);
+                    igateSTSInterval = millis64() + (config.igate_sts_interval * 1000);
                     igate_status(config.igate_status);
                 }
             }
             // IGATE Position
             if (config.igate_bcn)
             {
-                if (millis() > iGatetickInterval)
+                if (millis64() > iGatetickInterval)
                 {
 
                     String rawData = "";
@@ -7314,7 +7314,7 @@ void taskAPRS(void *pvParameters)
                     }
                     if (rawData != "")
                     {
-                        iGatetickInterval = millis() + (config.igate_interval * 1000);
+                        iGatetickInterval = millis64() + (config.igate_interval * 1000);
                         Sleep_Activate &= ~ACTIVATE_IGATE;
                         StandByTick = millis() + (5000);
                         if (config.igate_tlm_interval > 0)
@@ -7532,7 +7532,7 @@ void taskAPRS(void *pvParameters)
             }
             if (config.digi_auto)
             {
-                DiGiInterval = millis() + (config.digi_interval * 1000);
+                DiGiInterval = millis64() + (config.digi_interval * 1000);
             }
         }
 
@@ -7541,16 +7541,16 @@ void taskAPRS(void *pvParameters)
         {
             if (config.digi_sts_interval > 10)
             {
-                if (millis() > digiSTSInterval)
+                if (millis64() > digiSTSInterval)
                 {
-                    digiSTSInterval = millis() + (config.digi_sts_interval * 1000);
+                    digiSTSInterval = millis64() + (config.digi_sts_interval * 1000);
                     digi_status(config.digi_status);
                 }
             }
             // DIGI Position
             if (config.digi_bcn)
             {
-                if (millis() > DiGiInterval)
+                if (millis64() > DiGiInterval)
                 {
 
                     String rawData;
@@ -7579,7 +7579,7 @@ void taskAPRS(void *pvParameters)
                     }
                     if (rawData != "")
                     {
-                        DiGiInterval = millis() + (config.digi_interval * 1000);
+                        DiGiInterval = millis64() + (config.digi_interval * 1000);
                         Sleep_Activate &= ~ACTIVATE_DIGI;
                         StandByTick = millis() + (5000);
                         if (config.digi_tlm_interval > 0)
@@ -7841,7 +7841,7 @@ void taskAPRS(void *pvParameters)
         // Weather
         if (config.wx_en)
         {
-            if (millis() > WxInterval)
+            if (millis64() > WxInterval)
             {
 
                 String rawData = "";
@@ -7870,7 +7870,7 @@ void taskAPRS(void *pvParameters)
                 }
                 if (rawData != "")
                 {
-                    WxInterval = millis() + (config.wx_interval * 1000);
+                    WxInterval = millis64() + (config.wx_interval * 1000);
                     Sleep_Activate &= ~ACTIVATE_WX;
                     StandByTick = millis() + (5000);
                     log_d("WX_REPORT: %s", rawData.c_str());
@@ -7907,7 +7907,7 @@ void taskAPRS(void *pvParameters)
                 }
                 else
                 {
-                    WxInterval = millis() + (10 * 1000);
+                    WxInterval = millis64() + (10 * 1000);
                 }
 #ifdef MQTT
                 if (config.en_mqtt && (config.mqtt_topic_flag & MQTT_TOPIC_WX) && clientMQTT.connected())
@@ -7925,9 +7925,9 @@ void taskAPRS(void *pvParameters)
 #endif
             }
 #ifdef MQTT
-            if (millis() > WxIntervalAvg)
+            if (millis64() > WxIntervalAvg)
             {
-                WxIntervalAvg = millis() + (600 * 1000);
+                WxIntervalAvg = millis64() + (600 * 1000);
                 if (config.en_mqtt && (config.mqtt_topic_flag & MQTT_TOPIC_WX) && clientMQTT.connected())
                 {
                     char payload[500];
@@ -7946,9 +7946,9 @@ void taskAPRS(void *pvParameters)
 
         if (config.tlm0_en)
         {
-            if (systemTLM.ParmTimeout < millis())
+            if (systemTLM.ParmTimeout < millis64())
             {
-                systemTLM.ParmTimeout = millis() + (config.tlm0_info_interval * 1000);
+                systemTLM.ParmTimeout = millis64() + (config.tlm0_info_interval * 1000);
                 char rawInfo[100];
                 char name[10];
                 sprintf(rawInfo, "PARM.");
@@ -8013,9 +8013,9 @@ void taskAPRS(void *pvParameters)
                 sendTelemetry_0(rawInfo, true);
             }
 
-            if (systemTLM.TeleTimeout < millis())
+            if (systemTLM.TeleTimeout < millis64())
             {
-                systemTLM.TeleTimeout = millis() + (config.tlm0_data_interval * 1000);
+                systemTLM.TeleTimeout = millis64() + (config.tlm0_data_interval * 1000);
                 char rawTlm[100];
                 if (systemTLM.Sequence > 999)
                     systemTLM.Sequence = 0;
@@ -8081,14 +8081,14 @@ long wifiTTL = 0;
 // WiFi connect timeout per AP. Increase when connecting takes longer.
 const uint32_t connectTimeoutMs = 60000;
 uint8_t APStationNum = 0;
-unsigned long waitISRetry = 0;
+uint64_t waitISRetry = 0;
 unsigned long lastIsRx = 0; // last time any data arrived from APRS-IS
 #define APRS_IS_RX_TIMEOUT 120000 // aprsc sends "# keepalive" every ~20 s
-unsigned long lastHeardTimeout = 0;
+uint64_t lastHeardTimeout = 0;
 
 #ifdef PPPOS
 pppType pppStatus;
-long int pppTimeout = 0;
+uint64_t pppTimeout = 0;
 #endif
 
 IPAddress no_ip(0, 0, 0, 0);
@@ -8101,8 +8101,8 @@ uint8_t wifiStatus = WL_DISCONNECTED;
 bool vpnConnected = false;
 bool wifiDisconnecting = false;
 uint16_t wifiDisCount = 0;
-unsigned long vpnTimeout = 0;
-unsigned long mitiWifiTimeout = 0;
+uint64_t vpnTimeout = 0;
+uint64_t mitiWifiTimeout = 0;
 
 // WiFi current AP tracking for stable reconnection
 String currentAPSSID = "";
@@ -8152,8 +8152,8 @@ void wifiConnection()
     if (wifiMulti.run(10000) == WL_CONNECTED)
     {
         wifiDisCount = 0;
-        pingTimeout = millis() + 60000;
-        NTP_Timeout = millis() + 2000;
+        pingTimeout = millis64() + 60000;
+        NTP_Timeout = millis64() + 2000;
 
         // Track current AP for stable reconnection
         currentAPSSID = WiFi.SSID();
@@ -8169,7 +8169,7 @@ void wifiConnection()
             }
         }
         if(WiFi.RSSI() < -90){
-            //mitiWifiTimeout = millis() + 5000;
+            //mitiWifiTimeout = millis64() + 5000;
             // Set the protocol to 802.11b and 802.11g
             esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B);
         }else if(WiFi.RSSI() < -70){
@@ -8194,7 +8194,7 @@ void onEvent(arduino_event_id_t event, arduino_event_info_t info)
             {
                 log_d("Setup Wireguard VPN by PPP!");
                 vpnConnected = false;
-                vpnTimeout = millis() + 3000;
+                vpnTimeout = millis64() + 3000;
             }
 
 #ifdef MQTT
@@ -8224,12 +8224,12 @@ void onEvent(arduino_event_id_t event, arduino_event_info_t info)
     case ARDUINO_EVENT_PPP_LOST_IP:
         log_d("PPP Lost IP");
         WiFi.AP.enableNAPT(false);
-        pppTimeout = millis() + (60 * 1000);
+        pppTimeout = millis64() + (60 * 1000);
         break;
     case ARDUINO_EVENT_PPP_DISCONNECTED:
         log_d("PPP Disconnected");
         WiFi.AP.enableNAPT(false);
-        pppTimeout = millis() + (60 * 1000);
+        pppTimeout = millis64() + (60 * 1000);
         break;
     case ARDUINO_EVENT_PPP_STOP:
         log_d("PPP Stopped");
@@ -8270,7 +8270,7 @@ void onEvent(arduino_event_id_t event, arduino_event_info_t info)
         {
             log_d("Setup Wireguard VPN by WiFi!");
             vpnConnected = false;
-            vpnTimeout = millis() + 3000;
+            vpnTimeout = millis64() + 3000;
         }
 #ifdef MQTT
         if (config.en_mqtt)
@@ -8291,7 +8291,7 @@ void onEvent(arduino_event_id_t event, arduino_event_info_t info)
         wifiDisCount++;
 
         // Try immediate reconnect to current AP (don't wait for 30 disconnects)
-        if(millis() > lastReconnectAttempt + 5000) { // 5 seconds between attempts
+        if((millis() - lastReconnectAttempt) > 5000) { // 5 seconds between attempts
             lastReconnectAttempt = millis();
 
             if(currentAPIndex >= 0 && config.wifi_sta[currentAPIndex].enable) {
@@ -8308,7 +8308,7 @@ void onEvent(arduino_event_id_t event, arduino_event_info_t info)
             {
                 wifiDisCount = 0;
                 wifiDisconnecting = true;
-                pingTimeout = millis() + 10000;
+                pingTimeout = millis64() + 10000;
                 log_d("Multiple disconnects - performing full WiFi reconnection");
                 wifiConnection();
 #ifdef MQTT
@@ -8328,7 +8328,7 @@ void onEvent(arduino_event_id_t event, arduino_event_info_t info)
             {
                 // if(PPP.connected()){
                 vpnConnected = false;
-                vpnTimeout = millis() + 1000;
+                vpnTimeout = millis64() + 1000;
                 //}
             }
 #endif
@@ -8346,7 +8346,7 @@ void PPPOS_Start()
 {
     if (config.ppp_enable)
     {
-        pppTimeout = millis() + (600 * 1000);
+        pppTimeout = millis64() + (600 * 1000);
         log_d("Starting the modem. It might take a while!");
         PPP.end();
         pinMode(config.ppp_rst_gpio, OUTPUT);
@@ -8509,7 +8509,7 @@ void taskNetwork(void *pvParameters)
         // WiFi.setHostname(config.host_name);
         // if (wifiMulti.run() == WL_CONNECTED)
         // {
-        //     NTP_Timeout = millis() + 2000;
+        //     NTP_Timeout = millis64() + 2000;
         // }
         wifiConnection();
 
@@ -8533,7 +8533,7 @@ void taskNetwork(void *pvParameters)
         }
     }
 
-    pingTimeout = millis() + 10000;
+    pingTimeout = millis64() + 10000;
     unsigned long timeNetworkOld = millis();
     timeNetwork = 0;
 
@@ -8550,7 +8550,7 @@ void taskNetwork(void *pvParameters)
     pppStatus.gateway = 0;
     
     PPPOS_Start(); // Start PPP connection if enabled
-    pppTimeout = millis() + (600 * 1000);
+    pppTimeout = millis64() + (600 * 1000);
 #endif
 
 #ifdef PPPOS
@@ -8587,11 +8587,11 @@ void taskNetwork(void *pvParameters)
         {
             if (!PPP.connected())
             {
-                if (millis() > pppTimeout)
+                if (millis64() > pppTimeout)
                 {
                     log_d("PPP connection timeout!");
                     PPPOS_Start(); // Restart PPP connection
-                    pppTimeout = millis() + (600 * 1000);
+                    pppTimeout = millis64() + (600 * 1000);
                 }
             }
         }
@@ -8603,10 +8603,10 @@ void taskNetwork(void *pvParameters)
         {
             if (lastHeard_Flag)
             {
-                if (millis() > lastHeardTimeout)
+                if (millis64() > lastHeardTimeout)
                 {
                     lastHeard_Flag = false;
-                    lastHeardTimeout = millis() + 1000;
+                    lastHeardTimeout = millis64() + 1000;
                     event_lastHeard(false);
                 }
             }
@@ -8635,9 +8635,9 @@ void taskNetwork(void *pvParameters)
         {
             if (WiFi.isConnected() == false)
             {
-                if (millis() > mitiWifiTimeout)
+                if (millis64() > mitiWifiTimeout)
                 {
-                    mitiWifiTimeout = millis() + 30000;
+                    mitiWifiTimeout = millis64() + 30000;
                     log_d("WiFi Check Connection!");
 
                     // Try to reconnect to current AP first for stability
@@ -8667,9 +8667,9 @@ void taskNetwork(void *pvParameters)
 #endif
         {
             // config.pwr_sleep_activate |= ACTIVATE_WIFI;
-            if (millis() > NTP_Timeout)
+            if (millis64() > NTP_Timeout)
             {
-                NTP_Timeout = millis() + 86400000;
+                NTP_Timeout = millis64() + 86400000;
                 // setSyncProvider(getNtpTime);
                 log_d("Contacting Time Server\n");
                 configTime(3600 * config.timeZone, 0, config.ntp_host);
@@ -8684,7 +8684,7 @@ void taskNetwork(void *pvParameters)
                     {
                         systemUptime = time(NULL);
                     }
-                    pingTimeout = millis() + 2000;
+                    pingTimeout = millis64() + 2000;
                     if (config.vpn)
                     {
                         // if (wireguard_up())
@@ -8692,7 +8692,7 @@ void taskNetwork(void *pvParameters)
                         // else
                         //     log_d("Wireguard Connect Fail!");
                         log_d("Setup Wireguard Setup!");
-                        vpnTimeout = millis() + 10000;
+                        vpnTimeout = millis64() + 10000;
                         // if (wireguard_active()) wireguard_remove();
                         if (!wireguard_active())
                         {
@@ -8718,13 +8718,13 @@ void taskNetwork(void *pvParameters)
                 }
                 else
                 {
-                    NTP_Timeout = millis() + 5000;
+                    NTP_Timeout = millis64() + 5000;
                 }
             }
 
-            if (millis() > vpnTimeout && !vpnConnected && config.vpn)
+            if (millis64() > vpnTimeout && !vpnConnected && config.vpn)
             {
-                vpnTimeout = millis() + 10000;
+                vpnTimeout = millis64() + 10000;
                 log_d("RENEW Device Wireguard VPN!");
                 wireguard_change_device();
                 vpnConnected = true;
@@ -8734,15 +8734,15 @@ void taskNetwork(void *pvParameters)
             {
                 if (aprsClient.connected() == false)
                 {
-                    if (millis() > waitISRetry)
+                    if (millis64() > waitISRetry)
                     {
-                        waitISRetry = millis() + 30000; // Retry connect 30Sec
+                        waitISRetry = millis64() + 30000; // Retry connect 30Sec
                         if (APRSConnect())
                         {
                             lastIsRx = millis();
                             if (config.igate_bcn)
                             {
-                                iGatetickInterval = millis() + 10000; // send position after 10sec
+                                iGatetickInterval = millis64() + 10000; // send position after 10sec
                             }
                         }
                     }
@@ -8752,14 +8752,14 @@ void taskNetwork(void *pvParameters)
                     // Half-open TCP (NAT/4G): connected() stays true but nothing arrives
                     log_d("APRS-IS no data for %d s, reconnecting", APRS_IS_RX_TIMEOUT / 1000);
                     aprsClient.stop();
-                    waitISRetry = millis() + 5000;
+                    waitISRetry = millis64() + 5000;
                 }
                 else
                 {
                     if (aprsClient.available())
                     {
                         lastIsRx = millis();
-                        pingTimeout = millis() + 300000;                // Reset ping timout
+                        pingTimeout = millis64() + 300000;                // Reset ping timout
                         String line = aprsClient.readStringUntil('\n'); // อ่านค่าที่ Server ตอบหลับมาทีละบรรทัด
                         status.isCount++;
                         int start_val = line.indexOf(">", 0); // หาตำแหน่งแรกของ >
@@ -8896,9 +8896,9 @@ void taskNetwork(void *pvParameters)
             }
 #endif
 
-            if (millis() > pingTimeout)
+            if (millis64() > pingTimeout)
             {
-                pingTimeout = millis() + 600000;
+                pingTimeout = millis64() + 600000;
                 if (config.wifi_mode & WIFI_STA_FIX)
                 {
                     log_d("Ping WiFi to %s\n", WiFi.gatewayIP().toString().c_str());
@@ -8949,8 +8949,8 @@ void taskNetwork(void *pvParameters)
                         // if (wifiMulti.run() == WL_CONNECTED)
                         // {
                         //     wifiDisCount=0;
-                        //     pingTimeout = millis() + 60000;
-                        //     //NTP_Timeout = millis() + 2000;
+                        //     pingTimeout = millis64() + 60000;
+                        //     //NTP_Timeout = millis64() + 2000;
                         // }
                         // wifiMulti.run(5000,true); // Timeout 5 sec
                         // WiFi.reconnect();
@@ -9002,7 +9002,7 @@ void taskNetwork(void *pvParameters)
                         {
                             log_d("PPP Ping Fail!");
                             PPPOS_Start();
-                            pppTimeout = millis() + (600 * 1000);
+                            pppTimeout = millis64() + (600 * 1000);
                         }
                     }
                 }
@@ -9101,7 +9101,7 @@ void dispTxWindow(txDisp txs)
     display.clearDisplay();
 
     disp_delay = config.dispDelay * 1000;
-    timeHalfSec = millis() + disp_delay;
+    timeHalfSec = millis64() + disp_delay;
 
 #ifdef SSD1306_72x40
     display.fillRect(0, 0, 72, 9, WHITE);
@@ -9223,7 +9223,7 @@ void dispTxWindow(txDisp txs)
     display.setTextColor(ST77XX_BLUE);
     ledcWrite(ST7735_LED_K_Pin, config.disp_brightness);
     disp_delay = config.dispDelay * 1000;
-    timeHalfSec = millis() + disp_delay;
+    timeHalfSec = millis64() + disp_delay;
 
     display.setFont(&FreeSansBold9pt7b);
     display.setCursor(0, 14);
@@ -9488,7 +9488,7 @@ void dispWindow(String line, uint8_t mode, bool filter)
             {
                 disp_delay = config.dispDelay * 1000;
             }
-            timeHalfSec = millis() + disp_delay;
+            timeHalfSec = millis64() + disp_delay;
             // display.fillRect(0, 0, 128, 16, WHITE);
             const uint8_t *ptrSymbol;
             uint8_t symIdx = aprs.symbol[1] - 0x21;
@@ -10614,7 +10614,7 @@ void dispWindow(String line, uint8_t mode, bool filter)
             {
                 disp_delay = config.dispDelay * 1000;
             }
-            timeHalfSec = millis() + disp_delay;
+            timeHalfSec = millis64() + disp_delay;
 
             const uint8_t *ptrSymbol;
             uint8_t symIdx = aprs.symbol[1] - 0x21;

@@ -243,8 +243,8 @@ extern "C" {
 typedef struct igateTLM_struct
 {
 	uint16_t Sequence;
-	unsigned long ParmTimeout;
-	unsigned long TeleTimeout;
+	uint64_t ParmTimeout; // millis64() deadline
+	uint64_t TeleTimeout; // millis64() deadline
 	uint8_t RF2INET;
 	uint8_t INET2RF;
 	uint8_t RX;
@@ -303,8 +303,8 @@ typedef struct digiTLM_struct
 typedef struct dataTLM_struct
 {
 	unsigned int Sequence;
-	unsigned long ParmTimeout;
-	unsigned long TeleTimeout;
+	uint64_t ParmTimeout; // millis64() deadline
+	uint64_t TeleTimeout; // millis64() deadline
 	uint8_t A1;
 	uint8_t A2;
 	uint8_t A3;
