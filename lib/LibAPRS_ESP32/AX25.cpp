@@ -1256,7 +1256,7 @@ char ax25_encode(ax25frame &frame, char *txt, int size)
     char *token, *ptr;
     int i;
     unsigned int p, p2, p3;
-    char j;
+    int j; // was char: went negative for headers longer than 127 characters
     ptr = (char *)&frame;
     memset(ptr, 0, sizeof(ax25frame)); // Clear frame
     p = strpos(txt, ':');
@@ -1265,8 +1265,11 @@ char ax25_encode(ax25frame &frame, char *txt, int size)
         // printf("p{:}=%d\r\n",p);
         // Get String APRS
         memset(&frame.data, 0, sizeof(frame.data));
-        for (i = 0; i < (size - p); i++)
-            frame.data[i] = txt[p + i + 1];
+        // info field after ':' (was copied without any limit into frame.data)
+        size_t n = size - p - 1;
+        if (n > sizeof(frame.data) - 1)
+            n = sizeof(frame.data) - 1;
+        memcpy(frame.data, &txt[p + 1], n);
         p2 = strpos(txt, '>');
         if (p2 > 0 && p2 < size)
         {
@@ -1345,8 +1348,15 @@ int hdlcFrame(uint8_t *outbuf, size_t outbuf_len, AX25Ctx *ctx, ax25frame *pkg)
     uint8_t data = 0;
     ctx->crc_out = CRC_CCIT_INIT_VAL;
     int raw_count = 0;
-    uint8_t info[300];
-    //info[idx++] = HDLC_FLAG;
+    // Write straight into outbuf, never past outbuf_len (the old 300-byte local buffer overflowed
+    // with long packets: header up to 70 bytes + info up to AX25_FRAME_MAX_SIZE)
+#define HDLC_PUT(b)                         \
+    do                                      \
+    {                                       \
+        if ((size_t)idx >= outbuf_len)      \
+            return 0; /* too long: drop */  \
+        ax25_putRaw(&outbuf[idx++], ctx, (b)); \
+    } while (0)
 
     for (i = 0; i < 10; i++)
         pkg->header[i].ssid &= 0xFE; // Clear All END Path
@@ -1371,20 +1381,20 @@ int hdlcFrame(uint8_t *outbuf, size_t outbuf_len, AX25Ctx *ctx, ax25frame *pkg)
                 data = 0x20;
             // putchar(data);
             data <<= 1;
-            ax25_putRaw(&info[idx++], ctx, data);
+            HDLC_PUT(data);
             c++;
         }
-        ax25_putRaw(&info[idx++], ctx, (uint8_t)pkg->header[i].ssid);
+        HDLC_PUT((uint8_t)pkg->header[i].ssid);
         if (pkg->header[i].ssid & 0x01)
             break;
     }
 
-    ax25_putRaw(&info[idx++], ctx, AX25_CTRL_UI);      // Control field - 0x03 is APRS UI-frame
-    ax25_putRaw(&info[idx++], ctx, AX25_PID_NOLAYER3); // Protocol ID - 0xF0 is no layer 3
+    HDLC_PUT(AX25_CTRL_UI);      // Control field - 0x03 is APRS UI-frame
+    HDLC_PUT(AX25_PID_NOLAYER3); // Protocol ID - 0xF0 is no layer 3
 
     for (i = 0; i < strlen(pkg->data); i++)
     {
-        ax25_putRaw(&info[idx++], ctx, (uint8_t)pkg->data[i]);
+        HDLC_PUT((uint8_t)pkg->data[i]);
     }
 
     //uint8_t crcl = (ctx->crc_out & 0xff) ^ 0xff;
@@ -1396,7 +1406,7 @@ int hdlcFrame(uint8_t *outbuf, size_t outbuf_len, AX25Ctx *ctx, ax25frame *pkg)
 
     //info[idx++] = HDLC_FLAG;
     //int len = bit_stuffing(outbuf, outbuf_len, &info[0], idx);
-	memcpy(outbuf, &info[0], idx);
+#undef HDLC_PUT
     return idx;
 }
 

@@ -334,11 +334,17 @@ void APRS_sendPkt(void *_buffer, size_t length)
 
 void APRS_sendTNC2Pkt(const uint8_t *raw, size_t length)
 {
-    uint8_t data[300];
+    uint8_t data[AX25_FRAME_MAX_SIZE]; // was 300 while a frame can be up to AX25_FRAME_MAX_SIZE
     int size=0;
     ax25frame frame;
-    ax25_encode(frame, (char *)raw, length);
-    size=hdlcFrame(data, 300, &AX25, &frame);
+    if (!ax25_encode(frame, (char *)raw, length))
+    {
+        log_w("TX dropped: not a TNC2 packet");
+        return;
+    }
+    size=hdlcFrame(data, sizeof(data), &AX25, &frame);
+    if (size <= 0)
+        log_w("TX dropped: packet too long for an AX.25 frame");
     log_d("TX HDLC Fram size=%d",size);
     void *handle = NULL;
     if(size>0){

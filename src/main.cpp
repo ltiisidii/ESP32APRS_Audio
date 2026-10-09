@@ -306,8 +306,8 @@ void pushTxDisp(uint8_t ch, const char *name, char *info)
     txDisp pkg;
 
     pkg.tx_ch = ch;
-    strcpy(pkg.name, name);
-    strcpy(pkg.info, info);
+    strlcpy(pkg.name, name, sizeof(pkg.name));
+    strlcpy(pkg.info, info, sizeof(pkg.info));
     queTxDisp.push(&pkg); // ใส่แพ็จเก็จจาก TNC ลงคิวบัพเฟอร์
 }
 #endif
@@ -2927,8 +2927,8 @@ bool pkgTxPush(const char *info, size_t len, int dly, uint8_t Ch)
     {
         if (txQueue[i].Active == false)
         {
-            if (len > sizeof(txQueue[i].Info))
-                len = sizeof(txQueue[i].Info);
+            if (len > sizeof(txQueue[i].Info) - 1) // pkgTxSend() writes Info[length] = 0
+                len = sizeof(txQueue[i].Info) - 1;
             memset(txQueue[i].Info, 0, sizeof(txQueue[i].Info));
             memcpy(&txQueue[i].Info[0], info, len);
             txQueue[i].length = len;
@@ -5038,9 +5038,9 @@ void tracker_status(char *text)
     char name[50];
 
     if (config.trk_ssid > 0)
-        sprintf(name, "%s-%d>APE32A", config.trk_mycall, config.trk_ssid);
+        snprintf(name, sizeof(name), "%s-%d>APE32A", config.trk_mycall, config.trk_ssid);
     else
-        sprintf(name, "%s>APE32A", config.trk_mycall);
+        snprintf(name, sizeof(name), "%s>APE32A", config.trk_mycall);
 
     String tnc2Raw = String(name);
     if (config.trk_path < 5)
@@ -5069,9 +5069,9 @@ void igate_status(char *text)
     char name[50];
 
     if (config.aprs_ssid > 0)
-        sprintf(name, "%s-%d>APE32A", config.aprs_mycall, config.aprs_ssid);
+        snprintf(name, sizeof(name), "%s-%d>APE32A", config.aprs_mycall, config.aprs_ssid);
     else
-        sprintf(name, "%s>APE32A", config.aprs_mycall);
+        snprintf(name, sizeof(name), "%s>APE32A", config.aprs_mycall);
 
     String tnc2Raw = String(name);
     if (config.igate_path < 5)
@@ -5100,9 +5100,9 @@ void digi_status(char *text)
     char name[50];
 
     if (config.digi_ssid > 0)
-        sprintf(name, "%s-%d>APE32A", config.digi_mycall, config.digi_ssid);
+        snprintf(name, sizeof(name), "%s-%d>APE32A", config.digi_mycall, config.digi_ssid);
     else
-        sprintf(name, "%s>APE32A", config.digi_mycall);
+        snprintf(name, sizeof(name), "%s>APE32A", config.digi_mycall);
 
     String tnc2Raw = String(name);
     if (config.digi_path < 5)
@@ -6938,9 +6938,9 @@ void taskAPRS(void *pvParameters)
                             size_t tlm_sz;
                             if ((TLM_SEQ % 100) == 0)
                             {
-                                char rawInfo[100];
-                                char name[10];
-                                sprintf(rawInfo, "PARM.");
+                                char rawInfo[256];
+                                char name[32];
+                                snprintf(rawInfo, sizeof(rawInfo), "PARM.");
                                 int i, c = 0;
                                 for (i = 0; i < 5; i++)
                                 {
@@ -6952,18 +6952,18 @@ void taskAPRS(void *pvParameters)
                                     else
                                     {
                                         if (i > 0)
-                                            strcat(rawInfo, ",");
-                                        sprintf(name, "%s", config.trk_tlm_PARM[i]);
-                                        strcat(rawInfo, name);
+                                            strlcat(rawInfo, ",", sizeof(rawInfo));
+                                        snprintf(name, sizeof(name), "%s", config.trk_tlm_PARM[i]);
+                                        strlcat(rawInfo, name, sizeof(rawInfo));
                                     }
                                 }
                                 for (int n = c + 8; n > 0; n--)
                                 {
-                                    strcat(rawInfo, ",");
+                                    strlcat(rawInfo, ",", sizeof(rawInfo));
                                 }
                                 sendTelemetry_trk(rawInfo);
                                 memset(rawInfo, 0, sizeof(rawInfo));
-                                sprintf(rawInfo, "UNIT.");
+                                snprintf(rawInfo, sizeof(rawInfo), "UNIT.");
                                 c = 0;
                                 for (i = 0; i < 5; i++)
                                 {
@@ -6975,18 +6975,18 @@ void taskAPRS(void *pvParameters)
                                     else
                                     {
                                         if (i > 0)
-                                            strcat(rawInfo, ",");
-                                        sprintf(name, "%s", config.trk_tlm_UNIT[i]);
-                                        strcat(rawInfo, name);
+                                            strlcat(rawInfo, ",", sizeof(rawInfo));
+                                        snprintf(name, sizeof(name), "%s", config.trk_tlm_UNIT[i]);
+                                        strlcat(rawInfo, name, sizeof(rawInfo));
                                     }
                                 }
                                 for (int n = c + 8; n > 0; n--)
                                 {
-                                    strcat(rawInfo, ",");
+                                    strlcat(rawInfo, ",", sizeof(rawInfo));
                                 }
                                 sendTelemetry_trk(rawInfo);
                                 memset(rawInfo, 0, sizeof(rawInfo));
-                                sprintf(rawInfo, "EQNS.");
+                                snprintf(rawInfo, sizeof(rawInfo), "EQNS.");
                                 c = 0;
                                 for (i = 0; i < 5; i++)
                                 {
@@ -6998,35 +6998,35 @@ void taskAPRS(void *pvParameters)
                                     else
                                     {
                                         if (i > 0)
-                                            strcat(rawInfo, ",");
+                                            strlcat(rawInfo, ",", sizeof(rawInfo));
                                         if (fmod(config.trk_tlm_EQNS[i][0], 1) == 0)
-                                            sprintf(name, "%0.f", config.trk_tlm_EQNS[i][0]);
+                                            snprintf(name, sizeof(name), "%0.f", config.trk_tlm_EQNS[i][0]);
                                         else
-                                            sprintf(name, "%.3f", config.trk_tlm_EQNS[i][0]);
-                                        strcat(rawInfo, name);
+                                            snprintf(name, sizeof(name), "%.3f", config.trk_tlm_EQNS[i][0]);
+                                        strlcat(rawInfo, name, sizeof(rawInfo));
                                         if (fmod(config.trk_tlm_EQNS[i][1], 1) == 0)
-                                            sprintf(name, ",%0.f", config.trk_tlm_EQNS[i][1]);
+                                            snprintf(name, sizeof(name), ",%0.f", config.trk_tlm_EQNS[i][1]);
                                         else
-                                            sprintf(name, ",%.3f", config.trk_tlm_EQNS[i][1]);
-                                        strcat(rawInfo, name);
+                                            snprintf(name, sizeof(name), ",%.3f", config.trk_tlm_EQNS[i][1]);
+                                        strlcat(rawInfo, name, sizeof(rawInfo));
                                         if (fmod(config.trk_tlm_EQNS[i][2], 1) == 0)
-                                            sprintf(name, ",%0.f", config.trk_tlm_EQNS[i][2]);
+                                            snprintf(name, sizeof(name), ",%0.f", config.trk_tlm_EQNS[i][2]);
                                         else
-                                            sprintf(name, ",%.3f", config.trk_tlm_EQNS[i][2]);
-                                        strcat(rawInfo, name);
+                                            snprintf(name, sizeof(name), ",%.3f", config.trk_tlm_EQNS[i][2]);
+                                        strlcat(rawInfo, name, sizeof(rawInfo));
                                     }
                                 }
                                 for (int n = c; n > 0; n--)
                                 {
-                                    strcat(rawInfo, ",");
-                                    sprintf(name, "0");
-                                    strcat(rawInfo, name);
-                                    sprintf(name, ",1");
-                                    strcat(rawInfo, name);
-                                    sprintf(name, ",0");
-                                    strcat(rawInfo, name);
+                                    strlcat(rawInfo, ",", sizeof(rawInfo));
+                                    snprintf(name, sizeof(name), "0");
+                                    strlcat(rawInfo, name, sizeof(rawInfo));
+                                    snprintf(name, sizeof(name), ",1");
+                                    strlcat(rawInfo, name, sizeof(rawInfo));
+                                    snprintf(name, sizeof(name), ",0");
+                                    strlcat(rawInfo, name, sizeof(rawInfo));
                                 }
-                                // strcat(rawInfo, ",");
+                                // strlcat(rawInfo, ",", sizeof(rawInfo));
                                 sendTelemetry_trk(rawInfo);
                             }
 
@@ -7119,14 +7119,14 @@ void taskAPRS(void *pvParameters)
                 char name[12];
                 if (strlen(config.trk_item) > 3)
                 {
-                    sprintf(name, "%s", config.trk_item);
+                    snprintf(name, sizeof(name), "%s", config.trk_item);
                 }
                 else
                 {
                     if (config.trk_ssid > 0)
-                        sprintf(name, "%s-%d", config.trk_mycall, config.trk_ssid);
+                        snprintf(name, sizeof(name), "%s-%d", config.trk_mycall, config.trk_ssid);
                     else
-                        sprintf(name, "%s", config.trk_mycall);
+                        snprintf(name, sizeof(name), "%s", config.trk_mycall);
                 }
 #endif
                 uint8_t SendMode = 0;
@@ -7187,9 +7187,13 @@ void taskAPRS(void *pvParameters)
                         double Vrms = (double)mV / 1000;
 						double audBV = 20.0F * log10(Vrms);
                         info.remove(idx, 6);
-                        info += "[Audio:" + String(audBV, 1) + "dBV] ";
-                        info.toCharArray((char *)incomingPacket.info, info.length(), 0);
-                        incomingPacket.len = info.length() - 1;
+                        info += "[Audio:" + String(audBV, 1) + "dBV]";
+                        size_t n = info.length();
+                        if (n > sizeof(incomingPacket.info) - 1) // was copied back without a limit
+                            n = sizeof(incomingPacket.info) - 1;
+                        memcpy(incomingPacket.info, info.c_str(), n);
+                        incomingPacket.info[n] = 0;
+                        incomingPacket.len = n;
                     }
                     log_d("Peak:%d Valley:%d Signal:%d mV:%d", peak, valley, signalLevel, mV);
                     log_d("RX TNC2: %s", tnc2.c_str());
@@ -7307,7 +7311,7 @@ void taskAPRS(void *pvParameters)
                         if (rawP)
                         {
                             memset(rawP, 0, tnc2.length() + 1);
-                            tnc2.toCharArray(rawP, tnc2.length(), 0);
+                            tnc2.toCharArray(rawP, tnc2.length() + 1, 0); // +1: was dropping the last character
                             // memcpy(rawP, tnc2.c_str(), tnc2.length());
                             int idx = pkgListUpdate(call, rawP, type, 0, incomingPacket.mVrms);
 
@@ -7406,9 +7410,9 @@ void taskAPRS(void *pvParameters)
                                     size_t tlm_sz;
                                     if ((IGATE_TLM_SEQ % 100) == 0)
                                     {
-                                        char rawInfo[100];
-                                        char name[10];
-                                        sprintf(rawInfo, "PARM.");
+                                        char rawInfo[256];
+                                        char name[32];
+                                        snprintf(rawInfo, sizeof(rawInfo), "PARM.");
                                         int i, c = 0;
                                         for (i = 0; i < 5; i++)
                                         {
@@ -7420,18 +7424,18 @@ void taskAPRS(void *pvParameters)
                                             else
                                             {
                                                 if (i > 0)
-                                                    strcat(rawInfo, ",");
-                                                sprintf(name, "%s", config.igate_tlm_PARM[i]);
-                                                strcat(rawInfo, name);
+                                                    strlcat(rawInfo, ",", sizeof(rawInfo));
+                                                snprintf(name, sizeof(name), "%s", config.igate_tlm_PARM[i]);
+                                                strlcat(rawInfo, name, sizeof(rawInfo));
                                             }
                                         }
                                         for (int n = c + 8; n > 0; n--)
                                         {
-                                            strcat(rawInfo, ",");
+                                            strlcat(rawInfo, ",", sizeof(rawInfo));
                                         }
                                         sendTelemetry_igate(rawInfo);
                                         memset(rawInfo, 0, sizeof(rawInfo));
-                                        sprintf(rawInfo, "UNIT.");
+                                        snprintf(rawInfo, sizeof(rawInfo), "UNIT.");
                                         c = 0;
                                         for (i = 0; i < 5; i++)
                                         {
@@ -7443,18 +7447,18 @@ void taskAPRS(void *pvParameters)
                                             else
                                             {
                                                 if (i > 0)
-                                                    strcat(rawInfo, ",");
-                                                sprintf(name, "%s", config.igate_tlm_UNIT[i]);
-                                                strcat(rawInfo, name);
+                                                    strlcat(rawInfo, ",", sizeof(rawInfo));
+                                                snprintf(name, sizeof(name), "%s", config.igate_tlm_UNIT[i]);
+                                                strlcat(rawInfo, name, sizeof(rawInfo));
                                             }
                                         }
                                         for (int n = c + 8; n > 0; n--)
                                         {
-                                            strcat(rawInfo, ",");
+                                            strlcat(rawInfo, ",", sizeof(rawInfo));
                                         }
                                         sendTelemetry_igate(rawInfo);
                                         memset(rawInfo, 0, sizeof(rawInfo));
-                                        sprintf(rawInfo, "EQNS.");
+                                        snprintf(rawInfo, sizeof(rawInfo), "EQNS.");
                                         c = 0;
                                         for (i = 0; i < 5; i++)
                                         {
@@ -7466,35 +7470,35 @@ void taskAPRS(void *pvParameters)
                                             else
                                             {
                                                 if (i > 0)
-                                                    strcat(rawInfo, ",");
+                                                    strlcat(rawInfo, ",", sizeof(rawInfo));
                                                 if (fmod(config.igate_tlm_EQNS[i][0], 1) == 0)
-                                                    sprintf(name, "%0.f", config.igate_tlm_EQNS[i][0]);
+                                                    snprintf(name, sizeof(name), "%0.f", config.igate_tlm_EQNS[i][0]);
                                                 else
-                                                    sprintf(name, "%.3f", config.igate_tlm_EQNS[i][0]);
-                                                strcat(rawInfo, name);
+                                                    snprintf(name, sizeof(name), "%.3f", config.igate_tlm_EQNS[i][0]);
+                                                strlcat(rawInfo, name, sizeof(rawInfo));
                                                 if (fmod(config.igate_tlm_EQNS[i][1], 1) == 0)
-                                                    sprintf(name, ",%0.f", config.igate_tlm_EQNS[i][1]);
+                                                    snprintf(name, sizeof(name), ",%0.f", config.igate_tlm_EQNS[i][1]);
                                                 else
-                                                    sprintf(name, ",%.3f", config.igate_tlm_EQNS[i][1]);
-                                                strcat(rawInfo, name);
+                                                    snprintf(name, sizeof(name), ",%.3f", config.igate_tlm_EQNS[i][1]);
+                                                strlcat(rawInfo, name, sizeof(rawInfo));
                                                 if (fmod(config.igate_tlm_EQNS[i][2], 1) == 0)
-                                                    sprintf(name, ",%0.f", config.igate_tlm_EQNS[i][2]);
+                                                    snprintf(name, sizeof(name), ",%0.f", config.igate_tlm_EQNS[i][2]);
                                                 else
-                                                    sprintf(name, ",%.3f", config.igate_tlm_EQNS[i][2]);
-                                                strcat(rawInfo, name);
+                                                    snprintf(name, sizeof(name), ",%.3f", config.igate_tlm_EQNS[i][2]);
+                                                strlcat(rawInfo, name, sizeof(rawInfo));
                                             }
                                         }
                                         for (int n = c; n > 0; n--)
                                         {
-                                            strcat(rawInfo, ",");
-                                            sprintf(name, "0");
-                                            strcat(rawInfo, name);
-                                            sprintf(name, ",1");
-                                            strcat(rawInfo, name);
-                                            sprintf(name, ",0");
-                                            strcat(rawInfo, name);
+                                            strlcat(rawInfo, ",", sizeof(rawInfo));
+                                            snprintf(name, sizeof(name), "0");
+                                            strlcat(rawInfo, name, sizeof(rawInfo));
+                                            snprintf(name, sizeof(name), ",1");
+                                            strlcat(rawInfo, name, sizeof(rawInfo));
+                                            snprintf(name, sizeof(name), ",0");
+                                            strlcat(rawInfo, name, sizeof(rawInfo));
                                         }
-                                        // strcat(rawInfo, ",");
+                                        // strlcat(rawInfo, ",", sizeof(rawInfo));
                                         sendTelemetry_igate(rawInfo);
                                     }
 
@@ -7672,9 +7676,9 @@ void taskAPRS(void *pvParameters)
                                     size_t tlm_sz;
                                     if ((DIGI_TLM_SEQ % 100) == 0)
                                     {
-                                        char rawInfo[100];
-                                        char name[10];
-                                        sprintf(rawInfo, "PARM.");
+                                        char rawInfo[256];
+                                        char name[32];
+                                        snprintf(rawInfo, sizeof(rawInfo), "PARM.");
                                         int i, c = 0;
                                         for (i = 0; i < 5; i++)
                                         {
@@ -7686,18 +7690,18 @@ void taskAPRS(void *pvParameters)
                                             else
                                             {
                                                 if (i > 0)
-                                                    strcat(rawInfo, ",");
-                                                sprintf(name, "%s", config.digi_tlm_PARM[i]);
-                                                strcat(rawInfo, name);
+                                                    strlcat(rawInfo, ",", sizeof(rawInfo));
+                                                snprintf(name, sizeof(name), "%s", config.digi_tlm_PARM[i]);
+                                                strlcat(rawInfo, name, sizeof(rawInfo));
                                             }
                                         }
                                         for (int n = c + 8; n > 0; n--)
                                         {
-                                            strcat(rawInfo, ",");
+                                            strlcat(rawInfo, ",", sizeof(rawInfo));
                                         }
                                         sendTelemetry_digi(rawInfo);
                                         memset(rawInfo, 0, sizeof(rawInfo));
-                                        sprintf(rawInfo, "UNIT.");
+                                        snprintf(rawInfo, sizeof(rawInfo), "UNIT.");
                                         c = 0;
                                         for (i = 0; i < 5; i++)
                                         {
@@ -7709,18 +7713,18 @@ void taskAPRS(void *pvParameters)
                                             else
                                             {
                                                 if (i > 0)
-                                                    strcat(rawInfo, ",");
-                                                sprintf(name, "%s", config.digi_tlm_UNIT[i]);
-                                                strcat(rawInfo, name);
+                                                    strlcat(rawInfo, ",", sizeof(rawInfo));
+                                                snprintf(name, sizeof(name), "%s", config.digi_tlm_UNIT[i]);
+                                                strlcat(rawInfo, name, sizeof(rawInfo));
                                             }
                                         }
                                         for (int n = c + 8; n > 0; n--)
                                         {
-                                            strcat(rawInfo, ",");
+                                            strlcat(rawInfo, ",", sizeof(rawInfo));
                                         }
                                         sendTelemetry_digi(rawInfo);
                                         memset(rawInfo, 0, sizeof(rawInfo));
-                                        sprintf(rawInfo, "EQNS.");
+                                        snprintf(rawInfo, sizeof(rawInfo), "EQNS.");
                                         c = 0;
                                         for (i = 0; i < 5; i++)
                                         {
@@ -7732,35 +7736,35 @@ void taskAPRS(void *pvParameters)
                                             else
                                             {
                                                 if (i > 0)
-                                                    strcat(rawInfo, ",");
+                                                    strlcat(rawInfo, ",", sizeof(rawInfo));
                                                 if (fmod(config.digi_tlm_EQNS[i][0], 1) == 0)
-                                                    sprintf(name, "%0.f", config.digi_tlm_EQNS[i][0]);
+                                                    snprintf(name, sizeof(name), "%0.f", config.digi_tlm_EQNS[i][0]);
                                                 else
-                                                    sprintf(name, "%.3f", config.digi_tlm_EQNS[i][0]);
-                                                strcat(rawInfo, name);
+                                                    snprintf(name, sizeof(name), "%.3f", config.digi_tlm_EQNS[i][0]);
+                                                strlcat(rawInfo, name, sizeof(rawInfo));
                                                 if (fmod(config.digi_tlm_EQNS[i][1], 1) == 0)
-                                                    sprintf(name, ",%0.f", config.digi_tlm_EQNS[i][1]);
+                                                    snprintf(name, sizeof(name), ",%0.f", config.digi_tlm_EQNS[i][1]);
                                                 else
-                                                    sprintf(name, ",%.3f", config.digi_tlm_EQNS[i][1]);
-                                                strcat(rawInfo, name);
+                                                    snprintf(name, sizeof(name), ",%.3f", config.digi_tlm_EQNS[i][1]);
+                                                strlcat(rawInfo, name, sizeof(rawInfo));
                                                 if (fmod(config.digi_tlm_EQNS[i][2], 1) == 0)
-                                                    sprintf(name, ",%0.f", config.digi_tlm_EQNS[i][2]);
+                                                    snprintf(name, sizeof(name), ",%0.f", config.digi_tlm_EQNS[i][2]);
                                                 else
-                                                    sprintf(name, ",%.3f", config.digi_tlm_EQNS[i][2]);
-                                                strcat(rawInfo, name);
+                                                    snprintf(name, sizeof(name), ",%.3f", config.digi_tlm_EQNS[i][2]);
+                                                strlcat(rawInfo, name, sizeof(rawInfo));
                                             }
                                         }
                                         for (int n = c; n > 0; n--)
                                         {
-                                            strcat(rawInfo, ",");
-                                            sprintf(name, "0");
-                                            strcat(rawInfo, name);
-                                            sprintf(name, ",1");
-                                            strcat(rawInfo, name);
-                                            sprintf(name, ",0");
-                                            strcat(rawInfo, name);
+                                            strlcat(rawInfo, ",", sizeof(rawInfo));
+                                            snprintf(name, sizeof(name), "0");
+                                            strlcat(rawInfo, name, sizeof(rawInfo));
+                                            snprintf(name, sizeof(name), ",1");
+                                            strlcat(rawInfo, name, sizeof(rawInfo));
+                                            snprintf(name, sizeof(name), ",0");
+                                            strlcat(rawInfo, name, sizeof(rawInfo));
                                         }
-                                        // strcat(rawInfo, ",");
+                                        // strlcat(rawInfo, ",", sizeof(rawInfo));
                                         sendTelemetry_digi(rawInfo);
                                     }
 
@@ -8025,67 +8029,67 @@ void taskAPRS(void *pvParameters)
             if (systemTLM.ParmTimeout < millis64())
             {
                 systemTLM.ParmTimeout = millis64() + (config.tlm0_info_interval * 1000);
-                char rawInfo[100];
-                char name[10];
-                sprintf(rawInfo, "PARM.");
+                char rawInfo[256];
+                char name[32];
+                snprintf(rawInfo, sizeof(rawInfo), "PARM.");
                 for (int i = 0; i < 13; i++)
                 {
                     if (i > 0)
-                        strcat(rawInfo, ",");
-                    sprintf(name, "%s", config.tlm0_PARM[i]);
-                    strcat(rawInfo, name);
+                        strlcat(rawInfo, ",", sizeof(rawInfo));
+                    snprintf(name, sizeof(name), "%s", config.tlm0_PARM[i]);
+                    strlcat(rawInfo, name, sizeof(rawInfo));
                 }
                 sendTelemetry_0(rawInfo, true);
                 memset(rawInfo, 0, sizeof(rawInfo));
-                sprintf(rawInfo, "UNIT.");
+                snprintf(rawInfo, sizeof(rawInfo), "UNIT.");
                 for (int i = 0; i < 13; i++)
                 {
                     if (i > 0)
-                        strcat(rawInfo, ",");
-                    sprintf(name, "%s", config.tlm0_UNIT[i]);
-                    strcat(rawInfo, name);
+                        strlcat(rawInfo, ",", sizeof(rawInfo));
+                    snprintf(name, sizeof(name), "%s", config.tlm0_UNIT[i]);
+                    strlcat(rawInfo, name, sizeof(rawInfo));
                 }
                 sendTelemetry_0(rawInfo, true);
                 memset(rawInfo, 0, sizeof(rawInfo));
-                sprintf(rawInfo, "EQNS.");
+                snprintf(rawInfo, sizeof(rawInfo), "EQNS.");
                 for (int i = 0; i < 5; i++)
                 {
                     if (i > 0)
-                        strcat(rawInfo, ",");
+                        strlcat(rawInfo, ",", sizeof(rawInfo));
                     if (fmod(config.tlm0_EQNS[i][0], 1) == 0)
-                        sprintf(name, "%0.f", config.tlm0_EQNS[i][0]);
+                        snprintf(name, sizeof(name), "%0.f", config.tlm0_EQNS[i][0]);
                     else
-                        sprintf(name, "%.3f", config.tlm0_EQNS[i][0]);
-                    strcat(rawInfo, name);
+                        snprintf(name, sizeof(name), "%.3f", config.tlm0_EQNS[i][0]);
+                    strlcat(rawInfo, name, sizeof(rawInfo));
                     if (fmod(config.tlm0_EQNS[i][1], 1) == 0)
-                        sprintf(name, ",%0.f", config.tlm0_EQNS[i][1]);
+                        snprintf(name, sizeof(name), ",%0.f", config.tlm0_EQNS[i][1]);
                     else
-                        sprintf(name, ",%.3f", config.tlm0_EQNS[i][1]);
-                    strcat(rawInfo, name);
+                        snprintf(name, sizeof(name), ",%.3f", config.tlm0_EQNS[i][1]);
+                    strlcat(rawInfo, name, sizeof(rawInfo));
                     if (fmod(config.tlm0_EQNS[i][2], 1) == 0)
-                        sprintf(name, ",%0.f", config.tlm0_EQNS[i][2]);
+                        snprintf(name, sizeof(name), ",%0.f", config.tlm0_EQNS[i][2]);
                     else
-                        sprintf(name, ",%.3f", config.tlm0_EQNS[i][2]);
-                    strcat(rawInfo, name);
+                        snprintf(name, sizeof(name), ",%.3f", config.tlm0_EQNS[i][2]);
+                    strlcat(rawInfo, name, sizeof(rawInfo));
                 }
                 sendTelemetry_0(rawInfo, true);
                 memset(rawInfo, 0, sizeof(rawInfo));
-                sprintf(rawInfo, "BITS.");
+                snprintf(rawInfo, sizeof(rawInfo), "BITS.");
                 uint8_t b = 1;
                 for (int i = 0; i < 8; i++)
                 {
                     if (config.tlm0_BITS_Active & b)
                     {
-                        strcat(rawInfo, "1");
+                        strlcat(rawInfo, "1", sizeof(rawInfo));
                     }
                     else
                     {
-                        strcat(rawInfo, "0");
+                        strlcat(rawInfo, "0", sizeof(rawInfo));
                     }
                     b <<= 1;
                 }
-                strcat(rawInfo, ",");
-                strcat(rawInfo, config.tlm0_comment);
+                strlcat(rawInfo, ",", sizeof(rawInfo));
+                strlcat(rawInfo, config.tlm0_comment, sizeof(rawInfo));
                 sendTelemetry_0(rawInfo, true);
             }
 
@@ -8934,7 +8938,10 @@ void taskNetwork(void *pvParameters)
                                                     tnc2Raw += ",RFONLY"; // fix path to rf only not send loop to inet
                                                     tnc2Raw += ":}";      // 3rd-party frame
                                                     tnc2Raw += line;
-                                                    pkgTxPush(tnc2Raw.c_str(), tnc2Raw.length(), 0, RF_CHANNEL);
+                                                    if (line.length() < 256) // "}" + line must fit an APRS info field
+                                                        pkgTxPush(tnc2Raw.c_str(), tnc2Raw.length(), 0, RF_CHANNEL);
+                                                    else
+                                                        log_w("INET2RF dropped: too long for RF (%u)", (unsigned)line.length());
                                                     char sts[50];
                                                     sprintf(sts, "--SRC CALL--\n%s\n", src_call.c_str());
 #if defined OLED || defined ST7735_160x80 || defined GUI_LCD
@@ -8943,7 +8950,7 @@ void taskNetwork(void *pvParameters)
 #endif
                                                     status.inet2rf++;
                                                     igateTLM.INET2RF++;
-                                                    log_d("INET2RF: %s\n", line);
+                                                    log_d("INET2RF: %s\n", line.c_str());
                                                     free(strtmp);
                                                 }
                                                 tnc2Raw.clear();
@@ -9379,6 +9386,8 @@ void dispWindow(String line, uint8_t mode, bool filter)
         String src_call = line.substring(0, start_val);
         memset(&aprs, 0, sizeof(pbuf_t));
         aprs.buf_len = 300;
+        if (line.length() > sizeof(aprs.data) - 1) // aprs.data is 300 bytes
+            line.remove(sizeof(aprs.data) - 1);
         aprs.packet_len = line.length();
         memcpy(aprs.data, line.c_str(), line.length());
         // line.toCharArray(&aprs.data[0], aprs.packet_len);

@@ -246,29 +246,23 @@ int igateProcess(AX25Msg &Packet)
     {
         memset(Raw, 0, 500); // Clear frame packet
         size_t hSize = headerLen; // Use actual header length instead of strlen()
+        if (hSize > sizeof(header) - 1) // snprintf() sums can exceed what was written
+            hSize = sizeof(header) - 1;
+        size_t infoLen = Packet.len;
+        if (hSize + infoLen > 499)
+            infoLen = (hSize < 499) ? 499 - hSize : 0;
         memcpy(&Raw[0], header, hSize);           // Copy header to frame packet
-        memcpy(&Raw[hSize], &Packet.info[0], Packet.len); // Copy info to frame packet
-        uint8_t *ptr = &Raw[0];
-        int i, rmv = 0;
-        size_t fsize=hSize + Packet.len;        
-        // Remove CR,LF in frame packet
-        for (i = 0; i < fsize; i++)
+        memcpy(&Raw[hSize], &Packet.info[0], infoLen); // Copy info to frame packet
+        size_t fsize = hSize + infoLen;
+        // Remove CR/LF (they would start a new line on APRS-IS). The old loop tested the byte
+        // already written instead of the one being read, so CR/LF from RF went through.
+        int i = 0;
+        for (size_t k = 0; k < fsize; k++)
         {
-            if ((Raw[i] == '\r') || (Raw[i] == '\n'))
-            {
-                ptr++;
-                rmv++;
-            }
-            else
-            {
-                Raw[i] = *ptr++;
-            }
-            if(i>(fsize-rmv)){
-                i=fsize-rmv;
-                break;
-            }
+            if ((Raw[k] != '\r') && (Raw[k] != '\n'))
+                Raw[i++] = Raw[k];
         }
-        if(i>500 || i>fsize) i=strlen((char*)Raw);
+        Raw[i] = 0;
         log_d("RF2INET: %s", Raw);
         aprsIsSendLine((const char *)Raw, i); // Send packet to APRS-IS (aprsc)
         status.txCount++;
