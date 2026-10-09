@@ -50,6 +50,33 @@ The synthetic signal is flat (no de-emphasis), so the "flat audio" column is the
 The test fails if the 11 dB row drops below 39/40. If a change to the demodulator moves these
 numbers, update this table in the same commit and explain why.
 
+### WA8LMF TNC Test CD (demodulator only)
+
+Measured with `wav_decode` on the TNC Test CD **version 2.0** (FLAC tracks converted to WAV,
+44.1 kHz) on 2026-10-09. "Deemphasis Audio ON/OFF" is the web setting (`config.audio_lpf`)
+that selects the demodulator's input filter.
+
+| Track (v2.0 file) | Content | Deemphasis Audio ON | Deemphasis Audio OFF (default) | Dire Wolf reference |
+|---|---|---|---|---|
+| `01_40-Mins-Traffic` | Real traffic, flat audio (= "Track 1" in Dire Wolf's paper) | **1006** | 989 | 993 – 1021 |
+| `02_...DE-emphasized` | Same traffic, de-emphasized (= "Track 2"; the v2.0 file name is wrong) | 950 | **997** | 988 – 1022 |
+| `03_100-Mic-E-Bursts-Flat` | 100 identical Mic-E packets | **100/100** | **100/100** | 100 |
+| `04_25-MIns-Drive-Test` | Mobile with fading/multipath | **99** | 93 | — |
+
+Dire Wolf reference: "A Better APRS Packet Demodulator, Part 1, 1200 baud" (WB2OSZ), range of its
+decoder variants. In the same paper, on-air over 9 hours, a Kantronics KPC-3+ heard 70 % of what
+Dire Wolf heard.
+
+How to read it:
+- The firmware's demodulator, fed with clean audio, is **in the same range as Dire Wolf** on both
+  tracks, when the setting matches the audio: **ON for flat audio** (discriminator / data jack),
+  **OFF for speaker audio** (already de-emphasized). The wrong setting costs 2–5 %.
+- Consecutive identical frames (18 per track) are 0.3–1.1 s apart: separate transmissions on the
+  channel, not double decodes.
+- This measures the demodulator alone. The ESP32 ADC (noise, non-linearity, level) and the radio
+  are not included; the hardware test in [docs/test-plan.md](../../docs/test-plan.md) section 1
+  shows how much of this survives on the real unit.
+
 ### Bugs found by these tests (fixed in PR13)
 
 Found by the loopback tests:
