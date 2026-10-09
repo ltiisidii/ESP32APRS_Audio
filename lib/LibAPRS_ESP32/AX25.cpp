@@ -530,7 +530,7 @@ endParseFx25Frame:
 			// Only increment rxFrameHead after successful validation
 			rxFrameHead = tempRxFrameHead + 1;
 			rxFrameHead %= FRAME_MAX_COUNT;
-			if(rxFrameHead == txFrameHead)
+			if(rxFrameHead == rxFrameTail)
 				rxFrameBufferFull = true;
 			return h;
 		}
@@ -605,11 +605,9 @@ bool Ax25ReadNextRxFrame(uint8_t **dst, uint16_t *size, int8_t *peak, int8_t *va
 	*corrected = rxFrame[rxFrameTail].corrected;
 	*mV = rxFrame[rxFrameTail].mVrms;
 
-	//__disable_irq();
+	__sync_synchronize(); // frame fully copied before its slot is released
+	rxFrameTail = (rxFrameTail + 1) % FRAME_MAX_COUNT;
 	rxFrameBufferFull = false;
-	rxFrameTail++;
-	rxFrameTail %= FRAME_MAX_COUNT;
-	//__enable_irq();
 	return true;
 }
 
@@ -706,17 +704,19 @@ void Ax25BitParse(uint8_t bit, uint8_t modem,uint16_t mV)
 #endif
 									rxFrame[rxFrameHead].corrected = AX25_NOT_FX25;
 									//__disable_irq();
-									rxFrame[rxFrameHead++].size = rx->frameIdx;
-									rxFrameHead %= FRAME_MAX_COUNT;
-									if(rxFrameHead == rxFrameTail)
-										rxFrameBufferFull = true;
-									//__enable_irq();
-
+									rxFrame[rxFrameHead].size = rx->frameIdx;
+									// Copy the frame bytes first and publish it (move rxFrameHead) last: taskAPRS reads a
+									// frame as soon as rxFrameHead moves, and used to get it half written
 									for(uint16_t i = 0; i < rx->frameIdx; i++)
 									{
 										rxBuffer[rxBufferHead++] = rx->frame[i];
 										rxBufferHead %= FRAME_BUFFER_SIZE;
 									}
+									__sync_synchronize();
+									uint8_t nextHead = (rxFrameHead + 1) % FRAME_MAX_COUNT;
+									if(nextHead == rxFrameTail)
+										rxFrameBufferFull = true;
+									rxFrameHead = nextHead;
 								}else{
 									log_w("RX frame buffer full");
 								}

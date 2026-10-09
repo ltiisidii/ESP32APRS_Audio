@@ -6304,7 +6304,8 @@ void mainDisp(void *pvParameters)
                 int idx = 0;
                 if (popTNC2Raw(idx) > -1)
                 {
-                    pkgListType pkg = getPkgList(idx);
+                    char pkgRaw[512];
+                    pkgListType pkg = getPkgList(idx, pkgRaw, sizeof(pkgRaw));
                     rawDisp = String(pkg.raw);
                     dispWindow(rawDisp, dispMode, true);
                     selTab = idx;
@@ -6394,7 +6395,6 @@ void mainDisp(void *pvParameters)
                 {
                     timeHalfSec = millis64() + 2000 + disp_delay;
                     saveTimeout = millis();
-                    pkgListType pkg = getPkgList(selTab);
                     if (config.dim == 2)
                         dimTimeout = millis();
                     if (encoder0Pos > posNow)
@@ -6402,7 +6402,7 @@ void mainDisp(void *pvParameters)
                         selTab++;
                         for (; selTab < PKGLISTSIZE; selTab++)
                         {
-                            if (pkg.time > 0)
+                            if (getPkgList(selTab).time > 0)
                                 break;
                         }
                         if (selTab >= PKGLISTSIZE)
@@ -6413,7 +6413,7 @@ void mainDisp(void *pvParameters)
                         selTab--;
                         for (; selTab >= 0; selTab--)
                         {
-                            if (pkg.time > 0)
+                            if (getPkgList(selTab).time > 0)
                                 break;
                         }
                         if (selTab < 0)
@@ -6421,6 +6421,8 @@ void mainDisp(void *pvParameters)
                     }
                     posNow = encoder0Pos;
 
+                    char pkgRaw[512];
+                    pkgListType pkg = getPkgList(selTab, pkgRaw, sizeof(pkgRaw));
                     if (pkg.time > 0)
                     {
                         rawDisp = String(pkg.raw);

@@ -270,10 +270,7 @@ int igateProcess(AX25Msg &Packet)
         }
         if(i>500 || i>fsize) i=strlen((char*)Raw);
         log_d("RF2INET: %s", Raw);
-        if(aprsClient.connected()){
-            aprsClient.write(&Raw[0], i); // Send binary frame packet to APRS-IS (aprsc)
-            aprsClient.write("\r\n");     // Send CR LF the end frame packet
-        }
+        aprsIsSendLine((const char *)Raw, i); // Send packet to APRS-IS (aprsc)
         status.txCount++;
         free(Raw);
         log_d("Send TCP Finish!");
