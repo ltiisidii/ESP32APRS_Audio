@@ -19,6 +19,16 @@ enum SupervisedTask
 // Call from the supervised task at its start and on every loop iteration
 void supervisorFeed(SupervisedTask id);
 
+// True when a task last fed at 'last' (millis) is older than limitMs at time 'now'.
+// The age is signed: a feed stored after 'now' was read (the task runs on the other core, and
+// feeds store millis() | 1, up to 1 ms ahead) is "fresh", not 49 days old. Comparing unsigned
+// made (now - last) wrap to ~4294967 s and restarted the station every few seconds.
+static inline bool svStalled(uint32_t now, uint32_t last, uint32_t limitMs)
+{
+    int32_t age = (int32_t)(now - last);
+    return age > (int32_t)limitMs;
+}
+
 // Start the supervisor task (call once from setup() after the tasks are created)
 void supervisorStart(void);
 
