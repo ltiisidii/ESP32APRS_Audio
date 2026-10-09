@@ -1,7 +1,7 @@
 // Decodes a WAV file (e.g. a WA8LMF TNC Test CD track) with the firmware's demodulator.
 // Used by the tests and, built with -DWAV_DECODE_MAIN, as a command line tool:
 //   wav_decode <file.wav> [1200|300|9600] [flat] [-v]
-// Prints the number of decoded frames (and the frames with -v).
+// Prints the number of decoded frames (and, with -v, each frame prefixed by its time in seconds).
 #include <Arduino.h>
 #include <cmath>
 #include <cstdio>
@@ -115,7 +115,7 @@ int hostDecodeWav(const char *path, HostModem modem, bool flat, bool verbose)
             {
                 frames++;
                 if (verbose)
-                    std::printf("%s\n", hostTnc2(p).c_str());
+                    std::printf("%8.2f %s\n", i / outRate, hostTnc2(p).c_str()); // time in s
             }
         }
     }
