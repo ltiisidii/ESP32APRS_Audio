@@ -3227,7 +3227,6 @@ void RF_MODULE(bool boot)
     }
     log_d("RF Module %s Init", RF_TYPE[config.rf_type]);
     adcEn = -1;
-    dacEn = -1;
     //! DC3 Radio & Pixels VDD , Don't change
     // PMU.setDC3Voltage(3400);
     // PMU.disableDC3();
@@ -3371,7 +3370,6 @@ void RF_MODULE(bool boot)
     }
     delay(1);
     adcEn = 1;
-    dacEn = -1;
 }
 
 void RF_MODULE_CHECK()
@@ -3406,18 +3404,15 @@ boolean APRSConnect()
 {
     // Serial.println("Connect TCP Server");
     String login = "";
-    int cnt = 0;
     uint8_t con = aprsClient.connected();
     // Serial.println(con);
     if (con <= 0)
     {
         if (!aprsClient.connect(config.aprs_host, config.aprs_port)) // เชื่อมต่อกับเซิร์ฟเวอร์ TCP
         {
-            // Serial.print(".");
-            delay(1000);
-            cnt++;
-            if (cnt > 3) // วนร้องขอการเชื่อมต่อ 50 ครั้ง ถ้าไม่ได้ให้รีเทิร์นฟังค์ชั่นเป็น False
-                return false;
+            log_d("APRS-IS connect to %s:%d failed", config.aprs_host, config.aprs_port);
+            aprsClient.stop();
+            return false;
         }
         // ขอเชื่อมต่อกับ aprsc
         if (strlen(config.igate_object) >= 3)
@@ -5492,11 +5487,8 @@ void loop()
             if (++heapCount > 5)
             {
                 heapCount = 0;
-                vTaskSuspendAll();
-                WiFi.disconnect(true); // Disconnect from the network
-                WiFi.persistent(false);
-                WiFi.mode(WIFI_OFF); // Switch WiFi off
-                //PowerOff();
+                // Do not suspend the scheduler / call WiFi here: blocking calls with the
+                // scheduler suspended assert or hang instead of rebooting.
                 esp_restart();
             }
         }
@@ -5511,11 +5503,6 @@ void loop()
         {
             autoResetTimeout = millis() + (config.reset_timeout * 60000);
             log_d("Auto Reset System");
-            vTaskSuspendAll();
-            WiFi.disconnect(true); // Disconnect from the network
-            WiFi.persistent(false);
-            WiFi.mode(WIFI_OFF); // Switch WiFi off
-            // PowerOff();
             esp_restart();
         }
     }
@@ -6591,6 +6578,7 @@ void taskAPRS(void *pvParameters)
     // PacketBuffer.clean();
     adcEn = 0;
     dacEn = 0;
+    uint32_t txStartMs = 0; // PTT time-out timer start (0 = not transmitting)
 
     APRS_setCallsign(config.aprs_mycall, config.aprs_ssid);
     sendTimer = millis() - (config.igate_interval * 1000) + 30000;
@@ -6629,6 +6617,26 @@ void taskAPRS(void *pvParameters)
             DAC_TimerEnable(false);
             dacEn = 0;
         }
+        // PTT time-out timer: if TX never finishes (DAC timer stopped mid-frame, stuck state
+        // machine, stuck PTT GPIO) force everything back to RX.
+        if (getTransmit())
+        {
+            if (txStartMs == 0)
+                txStartMs = millis() | 1;
+            else if ((uint32_t)(millis() - txStartMs) > Ax25TxTimeoutMs())
+            {
+                log_e("PTT time-out (%u ms), aborting TX", (unsigned)(millis() - txStartMs));
+                Ax25TxAbort();
+                setPtt(false);
+                pttOff = false;
+                txStartMs = 0;
+            }
+        }
+        else
+        {
+            txStartMs = 0;
+        }
+
         // Deferred PTT off from ModemTransmitStop() ISR.
         // setPtt() calls LED_Status2() → strip->show() (NeoPixel RMT write)
         // which is NOT safe from ISR context — overflows the ISR stack.
@@ -8074,6 +8082,8 @@ long wifiTTL = 0;
 const uint32_t connectTimeoutMs = 60000;
 uint8_t APStationNum = 0;
 unsigned long waitISRetry = 0;
+unsigned long lastIsRx = 0; // last time any data arrived from APRS-IS
+#define APRS_IS_RX_TIMEOUT 120000 // aprsc sends "# keepalive" every ~20 s
 unsigned long lastHeardTimeout = 0;
 
 #ifdef PPPOS
@@ -8102,12 +8112,8 @@ unsigned long lastAPCheck = 0;
 
 void wifiConnection()
 {
-    // Cleanup sensor objects before WiFi reconnection to prevent memory leaks
-    cleanupSensors();
-
-    // Cleanup ADC resources to prevent memory leaks
-    AFSK_deinit();
-
+    // NOTE: do not touch the ADC/AFSK or the sensors here. They are not related to WiFi and
+    // nothing re-initializes them afterwards (RX went dead / sensors crashed on every reconnect).
     WiFi.disconnect(true, true, 500);
     WiFi.persistent(false);
     WiFi.mode(WIFI_OFF); // Switch WiFi off
@@ -8733,6 +8739,7 @@ void taskNetwork(void *pvParameters)
                         waitISRetry = millis() + 30000; // Retry connect 30Sec
                         if (APRSConnect())
                         {
+                            lastIsRx = millis();
                             if (config.igate_bcn)
                             {
                                 iGatetickInterval = millis() + 10000; // send position after 10sec
@@ -8740,10 +8747,18 @@ void taskNetwork(void *pvParameters)
                         }
                     }
                 }
+                else if ((uint32_t)(millis() - lastIsRx) > APRS_IS_RX_TIMEOUT)
+                {
+                    // Half-open TCP (NAT/4G): connected() stays true but nothing arrives
+                    log_d("APRS-IS no data for %d s, reconnecting", APRS_IS_RX_TIMEOUT / 1000);
+                    aprsClient.stop();
+                    waitISRetry = millis() + 5000;
+                }
                 else
                 {
                     if (aprsClient.available())
                     {
+                        lastIsRx = millis();
                         pingTimeout = millis() + 300000;                // Reset ping timout
                         String line = aprsClient.readStringUntil('\n'); // อ่านค่าที่ Server ตอบหลับมาทีละบรรทัด
                         status.isCount++;

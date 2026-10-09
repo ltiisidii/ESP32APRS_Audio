@@ -467,7 +467,6 @@ void handle_jquery(AsyncWebServerRequest *request)
 {
 #if defined(CONFIG_IDF_TARGET_ESP32)
 	adcEn = -1;
-	dacEn = -1;
 	delay(100);
 #endif
 	AsyncWebServerResponse *response = request->beginResponse_P(200, "application/javascript", (const uint8_t *)jquery_3_7_1_min_js_gz, jquery_3_7_1_min_js_gz_len);
@@ -478,7 +477,6 @@ void handle_jquery(AsyncWebServerRequest *request)
 #if defined(CONFIG_IDF_TARGET_ESP32)
 	delay(200);
 	adcEn = 1;
-	dacEn = 0;
 #endif
 }
 
@@ -1569,7 +1567,6 @@ void handle_storage(AsyncWebServerRequest *request)
 		return request->requestAuthentication();
 	}
 	adcEn = -1;
-	dacEn = -1;
 	delay(100);	
 
 	StandByTick = millis() + (config.pwr_stanby_delay * 1000);
@@ -1862,7 +1859,6 @@ void handle_storage(AsyncWebServerRequest *request)
 	request->send(response);
 	free(webString); // Free the allocated memory
 	adcEn = 1;
-	dacEn = 0;
 }
 
 void handle_download(AsyncWebServerRequest *request)
@@ -12330,7 +12326,6 @@ void webService()
 				else
 				{
 					adcEn = -1;
-					dacEn = -1;
 					delay(500);
 					// disableLoopWDT();
 					// disableCore0WDT();
