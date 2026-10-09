@@ -6945,7 +6945,7 @@ void taskAPRS(void *pvParameters)
                         {
                             char tlm_result[100];
                             char tlm_data[200];
-                            size_t tlm_sz;
+                            size_t tlm_sz = 0;
                             if ((TLM_SEQ % 100) == 0)
                             {
                                 char rawInfo[256];
@@ -7417,7 +7417,7 @@ void taskAPRS(void *pvParameters)
                                 {
                                     char tlm_result[100];
                                     char tlm_data[200];
-                                    size_t tlm_sz;
+                                    size_t tlm_sz = 0;
                                     if ((IGATE_TLM_SEQ % 100) == 0)
                                     {
                                         char rawInfo[256];
@@ -7683,7 +7683,7 @@ void taskAPRS(void *pvParameters)
                                 {
                                     char tlm_result[100];
                                     char tlm_data[200];
-                                    size_t tlm_sz;
+                                    size_t tlm_sz = 0;
                                     if ((DIGI_TLM_SEQ % 100) == 0)
                                     {
                                         char rawInfo[256];

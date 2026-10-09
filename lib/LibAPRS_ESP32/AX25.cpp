@@ -315,7 +315,7 @@ static void *writeFx25Frame(uint8_t *data, uint16_t size)
 	//bitstuffing occurs after 5 consecutive ones, so in worst scenario
 	//bits inserted by bitstuffing can occupy up to frame size / 5 additional bytes
 	//also add 1 in case there is a remainder when dividing
-	const struct Fx25Mode *fx25Mode = fx25Mode = Fx25GetModeForSize(size + 4 + (size / 5) + 1);
+	const struct Fx25Mode *fx25Mode = Fx25GetModeForSize(size + 4 + (size / 5) + 1);
 	uint16_t requiredSize = size;
 	if(NULL != fx25Mode)
 		requiredSize = fx25Mode->K + fx25Mode->T;
@@ -526,6 +526,11 @@ endParseFx25Frame:
 
 		if(Ax25Config.allowNonAprs || (((rxBuffer[(pathEnd + 1) % FRAME_BUFFER_SIZE] == 0x03) && (rxBuffer[(pathEnd + 2) % FRAME_BUFFER_SIZE] == 0xF0))))
 		{
+			if((lastCrc != 0) && (*crc == lastCrc)) //already received by the other demodulator
+			{
+				removeLastFrameFromRxBuffer();
+				return NULL;
+			}
 			h->size = k - 2;
 			// Only increment rxFrameHead after successful validation
 			rxFrameHead = tempRxFrameHead + 1;
@@ -1128,7 +1133,7 @@ void Ax25Init(uint8_t fx25Mode)
 
 	txDelay = ((float)Ax25Config.txDelayLength / (8.f * 1000.f / ModemGetBaudrate())); //change milliseconds to byte count
 	txTail = ((float)Ax25Config.txTailLength / (8.f * 1000.f / ModemGetBaudrate()));
-	txInitStage == TX_INIT_OFF;
+	txInitStage = TX_INIT_OFF; // was "==" (no effect)
 	txQuiet = (millis64() + (Ax25Config.quietTime) + random(10, 200)); //calculate required delay
 }
 
@@ -1317,6 +1322,8 @@ char ax25_encode(ax25frame &frame, char *txt, int size)
                     break;
                 }
             }
+            if (i == 10) // all 10 addresses used (8 digipeaters): the last one ends the field
+                frame.header[9].ssid |= 0x01;
             // }
             return 1;
         }
@@ -1369,6 +1376,8 @@ int hdlcFrame(uint8_t *outbuf, size_t outbuf_len, AX25Ctx *ctx, ax25frame *pkg)
             break;
         }
     }
+    if (i == 10) // 8 digipeaters: without the end bit the frame could not be decoded
+        pkg->header[9].ssid |= 0x01;
 
     for (i = 0; i < 10; i++)
     {

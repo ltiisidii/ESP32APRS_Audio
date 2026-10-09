@@ -1,0 +1,2 @@
+# Host tests run with make inside Linux (Docker): keep LF line endings
+test/host/** text eol=lf
