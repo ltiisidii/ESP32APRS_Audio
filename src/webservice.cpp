@@ -40,9 +40,10 @@ char *allocateStringMemory(size_t size)
 	}
 	// If PSRAM allocation fails, fall back to regular heap
 #endif
-	// Regular heap allocation
+	// Regular heap allocation (calloc already zeroes it; callers check for NULL)
 	ptr = (char *)calloc(size, sizeof(char));
-	memset(ptr, 0, size); // Initialize memory to zero
+	if (ptr == NULL)
+		log_e("allocateStringMemory(%u) failed", (unsigned)size);
 	return ptr;
 }
 

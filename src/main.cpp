@@ -2863,17 +2863,20 @@ bool pkgTxDuplicate(AX25Msg ax25)
                 continue;
 
             if (ax25.src.ssid > 0)
-                sprintf(callsign, "%s-%d", ax25.src.call, ax25.src.ssid);
+                snprintf(callsign, sizeof(callsign), "%s-%d", ax25.src.call, ax25.src.ssid);
             else
-                sprintf(callsign, "%s", ax25.src.call);
-            if (strncmp(&txQueue[i].Info[0], callsign, strlen(callsign)) >= 0) // Check duplicate src callsign
+                snprintf(callsign, sizeof(callsign), "%s", ax25.src.call);
+            // Exact match only. The old ">= 0" comparisons were true for almost any received
+            // packet, so hearing unrelated traffic cancelled pending beacons and delayed digipeats.
+            size_t cl = strlen(callsign);
+            if (strncmp(txQueue[i].Info, callsign, cl) == 0 && txQueue[i].Info[cl] == '>') // same source
             {
-                char *ecs1 = strstr(txQueue[i].Info, ":");
+                char *ecs1 = strchr(txQueue[i].Info, ':');
                 if (ecs1 == NULL)
                     continue;
-                ;
-                if (strncmp(ecs1, (const char *)ax25.info, strlen(ecs1)) >= 0)
-                { // Check duplicate aprs info
+                ecs1++; // info field starts after ':'
+                if (strlen(ecs1) == ax25.len && memcmp(ecs1, ax25.info, ax25.len) == 0)
+                { // Same packet already pending: drop ours (heard repeated by another station)
                     txQueue[i].Active = false;
                     psramUnlock();
                     return true;
