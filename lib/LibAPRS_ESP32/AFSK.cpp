@@ -19,7 +19,9 @@
 // #include "driver/gptimer.h"
 
 #include <hal/misc.h>
+#if __has_include(<soc/syscon_struct.h>) // not on ESP32-C6; only used by the I2S_INTERNAL code
 #include <soc/syscon_struct.h>
+#endif
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -32,6 +34,8 @@
 #include <esp32c3/rom/crc.h>
 #elif defined(CONFIG_IDF_TARGET_ESP32S3)
 #include "esp32s3/rom/crc.h"
+#elif defined(CONFIG_IDF_TARGET_ESP32C6)
+#include "esp32c6/rom/crc.h"
 #else
 #include "esp32/rom/crc.h"
 #endif
@@ -42,8 +46,10 @@
 
 extern "C"
 {
+#if __has_include("soc/syscon_reg.h")
 #include "soc/syscon_reg.h"
 #include "soc/syscon_struct.h"
+#endif
 }
 
 #define DEBUG_TNC
@@ -1043,8 +1049,13 @@ static bool IRAM_ATTR s_conv_done_cb(adc_continuous_handle_t stAdcHandle, const 
       continue;
     adcPush = (int16_t)p->type1.data;
 #else
+#if SOC_ADC_PERIPH_NUM > 1
     if ((p->type2.channel > 0) || (p->type2.unit > 0))
       continue;
+#else
+    if (p->type2.channel > 0) // single ADC unit (ESP32-C6): no unit field
+      continue;
+#endif
     adcPush = (int)p->type2.data;
 #endif
 
