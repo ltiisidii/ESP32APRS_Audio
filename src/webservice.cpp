@@ -47,6 +47,19 @@ char *allocateStringMemory(size_t size)
 	return ptr;
 }
 
+// PATH option label: the "UserDefine" entries show what they contain, e.g.
+// "UserDefine 3 (WIDE1-1,WIDE2-1)", instead of a bare name (index values are unchanged)
+static const char *pathLabel(uint8_t idx)
+{
+	static char buf[sizeof(config.path[0]) + 24];
+	if (idx >= 13 && idx <= 16 && config.path[idx - 13][0])
+	{
+		snprintf(buf, sizeof(buf), "%s (%s)", PATH_NAME[idx], config.path[idx - 13]);
+		return buf;
+	}
+	return PATH_NAME[idx];
+}
+
 // Helper function to format integers to string using allocateStringMemory
 char *intToString(int value)
 {
@@ -3474,7 +3487,7 @@ void handle_msg(AsyncWebServerRequest *request)
 			{
 				strcat(html, ">");
 			}
-			snprintf(temp_buffer, sizeof(temp_buffer), "%s</option>\n", PATH_NAME[pthIdx]);
+			snprintf(temp_buffer, sizeof(temp_buffer), "%s</option>\n", pathLabel(pthIdx));
 			strcat(html, temp_buffer);
 		}
 		strcat(html, "</select></td>\n");
@@ -7454,11 +7467,11 @@ void handle_igate(AsyncWebServerRequest *request)
 			{
 				if (config.igate_path == pthIdx)
 				{
-				snprintf(tempHtml, sizeof(tempHtml), "<option value=\"%d\" selected>%s</option>\n", pthIdx, PATH_NAME[pthIdx]);
+				snprintf(tempHtml, sizeof(tempHtml), "<option value=\"%d\" selected>%s</option>\n", pthIdx, pathLabel(pthIdx));
 				}
 				else
 				{
-				snprintf(tempHtml, sizeof(tempHtml), "<option value=\"%d\">%s</option>\n", pthIdx, PATH_NAME[pthIdx]);
+				snprintf(tempHtml, sizeof(tempHtml), "<option value=\"%d\">%s</option>\n", pthIdx, pathLabel(pthIdx));
 				}
 			strcat(html, tempHtml);
 		}
@@ -8315,11 +8328,11 @@ void handle_digi(AsyncWebServerRequest *request)
 		{
 			if (config.digi_path == pthIdx)
 			{
-				snprintf(tempHtml, sizeof(tempHtml), "<option value=\"%d\" selected>%s</option>\n", pthIdx, PATH_NAME[pthIdx]);
+				snprintf(tempHtml, sizeof(tempHtml), "<option value=\"%d\" selected>%s</option>\n", pthIdx, pathLabel(pthIdx));
 			}
 			else
 			{
-				snprintf(tempHtml, sizeof(tempHtml), "<option value=\"%d\">%s</option>\n", pthIdx, PATH_NAME[pthIdx]);
+				snprintf(tempHtml, sizeof(tempHtml), "<option value=\"%d\">%s</option>\n", pthIdx, pathLabel(pthIdx));
 			}
 			strcat(html, tempHtml);
 		}
@@ -8861,11 +8874,11 @@ void handle_wx(AsyncWebServerRequest *request)
 		{
 			if (config.wx_path == pthIdx)
 			{
-				snprintf(tempHtml, sizeof(tempHtml), "<option value=\"%d\" selected>%s</option>\n", pthIdx, PATH_NAME[pthIdx]);
+				snprintf(tempHtml, sizeof(tempHtml), "<option value=\"%d\" selected>%s</option>\n", pthIdx, pathLabel(pthIdx));
 			}
 			else
 			{
-				snprintf(tempHtml, sizeof(tempHtml), "<option value=\"%d\">%s</option>\n", pthIdx, PATH_NAME[pthIdx]);
+				snprintf(tempHtml, sizeof(tempHtml), "<option value=\"%d\">%s</option>\n", pthIdx, pathLabel(pthIdx));
 			}
 			strcat(html, tempHtml);
 		}
@@ -9289,11 +9302,11 @@ void handle_tlm(AsyncWebServerRequest *request)
 				{
 					if (config.tlm0_path == pthIdx)
 					{
-						snprintf(temp_path, 256, "<option value=\"%d\" selected>%s</option>\n", pthIdx, PATH_NAME[pthIdx]);
+						snprintf(temp_path, 256, "<option value=\"%d\" selected>%s</option>\n", pthIdx, pathLabel(pthIdx));
 					}
 					else
 					{
-						snprintf(temp_path, 256, "<option value=\"%d\">%s</option>\n", pthIdx, PATH_NAME[pthIdx]);
+						snprintf(temp_path, 256, "<option value=\"%d\">%s</option>\n", pthIdx, pathLabel(pthIdx));
 					}
 					strcat(html, temp_path);
 					free(temp_path);
@@ -10494,11 +10507,11 @@ void handle_tracker(AsyncWebServerRequest *request)
 	{
 		if (config.trk_path == pthIdx)
 		{
-			snprintf(tempHtml, sizeof(tempHtml), "<option value=\"%d\" selected>%s</option>\n", pthIdx, PATH_NAME[pthIdx]);
+			snprintf(tempHtml, sizeof(tempHtml), "<option value=\"%d\" selected>%s</option>\n", pthIdx, pathLabel(pthIdx));
 		}
 		else
 		{
-			snprintf(tempHtml, sizeof(tempHtml), "<option value=\"%d\">%s</option>\n", pthIdx, PATH_NAME[pthIdx]);
+			snprintf(tempHtml, sizeof(tempHtml), "<option value=\"%d\">%s</option>\n", pthIdx, pathLabel(pthIdx));
 		}
 		strcat(html, tempHtml);
 	}

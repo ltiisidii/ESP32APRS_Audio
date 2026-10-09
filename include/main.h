@@ -109,6 +109,8 @@
 #define FILTER_MICE (1 << 9)		// packet is MIC-E
 #define FILTER_THIRDPARTY (1 << 10) // packet is 3rd-party packet from INET2RF
 #define FILTER_ENABLE_ALL (1 << 15)			// Packet is enable all packet
+// Default digipeater filter: every APRS packet type (status and telemetry used to be left out)
+#define DIGI_FILTER_DEFAULT (FILTER_OBJECT | FILTER_ITEM | FILTER_MESSAGE | FILTER_WX | FILTER_TELEMETRY |                              FILTER_QUERY | FILTER_STATUS | FILTER_POSITION | FILTER_BUOY | FILTER_MICE | FILTER_THIRDPARTY)
 
 #define RF_NONE 0
 #define RF_SA868_VHF 1 // G-NiceRF SA818,SA868 VHF band 134~174 MHz
