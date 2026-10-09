@@ -8103,7 +8103,6 @@ IPAddress ap_dns(8, 8, 4, 4);
 
 uint8_t wifiStatus = WL_DISCONNECTED;
 bool vpnConnected = false;
-bool wifiDisconnecting = false;
 uint16_t wifiDisCount = 0;
 uint64_t vpnTimeout = 0;
 uint64_t mitiWifiTimeout = 0;
@@ -8111,8 +8110,55 @@ uint64_t mitiWifiTimeout = 0;
 // WiFi current AP tracking for stable reconnection
 String currentAPSSID = "";
 int8_t currentAPIndex = -1;
-unsigned long lastReconnectAttempt = 0;
 unsigned long lastAPCheck = 0;
+
+// WiFi recovery, all driven from taskNetwork (never from the WiFi event callback)
+uint8_t wifiRetry = 0; // consecutive failed reconnect attempts
+uint8_t pingFail = 0;  // consecutive failed gateway pings
+#define WIFI_RETRY_PERIOD_MS 30000
+#define WIFI_RETRY_SCAN_EVERY 4    // every Nth attempt scans all configured APs, not only the last one
+#define WIFI_RETRY_FULL_RESET 10   // ~5 min of failed attempts -> full WiFi restart
+#define PING_FAIL_SOFT 3           // gateway ping failures -> WiFi.reconnect()
+#define PING_FAIL_FULL 6           // gateway ping failures -> full WiFi restart
+
+bool wifiStaConfigured()
+{
+    for (int i = 0; i < 5; i++)
+        if (config.wifi_sta[i].enable && config.wifi_sta[i].wifi_ssid[0])
+            return true;
+    return false;
+}
+
+void wifiTrackCurrentAP()
+{
+    currentAPSSID = WiFi.SSID();
+    currentAPIndex = -1;
+    for (int i = 0; i < 5; i++)
+    {
+        if (config.wifi_sta[i].enable &&
+            strcmp(config.wifi_sta[i].wifi_ssid, currentAPSSID.c_str()) == 0)
+        {
+            currentAPIndex = i;
+            log_d("Connected to AP[%d]: %s", i, currentAPSSID.c_str());
+            break;
+        }
+    }
+}
+
+// (Re)create the own access point. Needed after every WiFi off/mode change: switching WiFi
+// off drops the AP configuration (SSID, password, IP), so the AP used to vanish after the
+// first full WiFi reconnection.
+void wifiApStart()
+{
+    uint8_t ch = (config.wifi_ap_ch >= 1 && config.wifi_ap_ch <= 13) ? config.wifi_ap_ch : 6;
+    WiFi.AP.begin();
+    WiFi.AP.config(ap_ip, ap_ip, ap_mask, ap_leaseStart, ap_dns);
+    WiFi.AP.create(config.wifi_ap_ssid, config.wifi_ap_pass, ch);
+    if (!WiFi.AP.waitStatusBits(ESP_NETIF_STARTED_BIT, 1000))
+        log_e("Failed to start AP!");
+    else
+        log_d("AP %s running at %s", config.wifi_ap_ssid, WiFi.softAPIP().toString().c_str());
+}
 
 void wifiConnection()
 {
@@ -8143,6 +8189,10 @@ void wifiConnection()
     {
         WiFi.mode(WIFI_MODE_NULL);
     }
+    if (config.wifi_mode & WIFI_AP_FIX)
+        wifiApStart(); // WIFI_OFF above dropped the AP
+    WiFi.setTxPower((wifi_power_t)config.wifi_power); // also reset by WIFI_OFF
+    WiFi.setSleep(false); // fixed station: modem sleep causes missed beacons and disconnects
     wifiMulti.APlistClean(); // Clean AP list
     for (int i = 0; i < 5; i++)
     {
@@ -8153,25 +8203,16 @@ void wifiConnection()
     }
     esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
     WiFi.setHostname(config.host_name);
-    if (wifiMulti.run(10000) == WL_CONNECTED)
+    if (wifiStaConfigured() && wifiMulti.run(10000) == WL_CONNECTED)
     {
         wifiDisCount = 0;
+        wifiRetry = 0;
+        pingFail = 0;
         pingTimeout = millis64() + 60000;
         NTP_Timeout = millis64() + 2000;
 
         // Track current AP for stable reconnection
-        currentAPSSID = WiFi.SSID();
-        currentAPIndex = -1;
-        for (int i = 0; i < 5; i++)
-        {
-            if (config.wifi_sta[i].enable &&
-                strcmp(config.wifi_sta[i].wifi_ssid, currentAPSSID.c_str()) == 0)
-            {
-                currentAPIndex = i;
-                log_d("Connected to AP[%d]: %s", i, currentAPSSID.c_str());
-                break;
-            }
-        }
+        wifiTrackCurrentAP();
         if(WiFi.RSSI() < -90){
             //mitiWifiTimeout = millis64() + 5000;
             // Set the protocol to 802.11b and 802.11g
@@ -8262,7 +8303,6 @@ void onEvent(arduino_event_id_t event, arduino_event_info_t info)
         break;
     case ARDUINO_EVENT_WIFI_STA_CONNECTED:
         wifiDisCount = 0;
-        wifiDisconnecting = false;
         // String info = "WiFi Infor:";
         // info += "\nSSID: " + WiFi.SSID();
         // info += "\nRSSI: " + String(WiFi.RSSI()) + "dBm";
@@ -8291,53 +8331,10 @@ void onEvent(arduino_event_id_t event, arduino_event_info_t info)
         log_d("WiFi Connected");
         break;
     case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-        log_d("WiFi Disconnected");
+        // Only record it. Reconnection is done by taskNetwork: blocking WiFi calls here stalled
+        // the event loop and competed with taskNetwork's own reconnection.
         wifiDisCount++;
-
-        // Try immediate reconnect to current AP (don't wait for 30 disconnects)
-        if((millis() - lastReconnectAttempt) > 5000) { // 5 seconds between attempts
-            lastReconnectAttempt = millis();
-
-            if(currentAPIndex >= 0 && config.wifi_sta[currentAPIndex].enable) {
-                log_d("Immediate reconnect attempt to AP[%d]: %s",
-                      currentAPIndex, config.wifi_sta[currentAPIndex].wifi_ssid);
-                WiFi.begin(
-                    config.wifi_sta[currentAPIndex].wifi_ssid,
-                    config.wifi_sta[currentAPIndex].wifi_pass
-                );
-            }
-
-            // Full reconnect only after multiple failed attempts (reduced from 30 to 10)
-            if (wifiDisconnecting == false && wifiDisCount > 10)
-            {
-                wifiDisCount = 0;
-                wifiDisconnecting = true;
-                pingTimeout = millis64() + 10000;
-                log_d("Multiple disconnects - performing full WiFi reconnection");
-                wifiConnection();
-#ifdef MQTT
-            if (config.en_mqtt)
-            {
-                if (!clientMQTT.connected())
-                {
-                    clientMQTT.disconnect();
-                    clientMQTT.setServer(config.mqtt_host, config.mqtt_port);
-                    clientMQTT.setCallback(mqtt_callback);
-                }
-                mqtt_reconnect();
-            }
-#endif
-#ifdef PPPOS
-            if (config.vpn)
-            {
-                // if(PPP.connected()){
-                vpnConnected = false;
-                vpnTimeout = millis64() + 1000;
-                //}
-            }
-#endif
-            }
-        }
+        log_d("WiFi Disconnected, reason %d", info.wifi_sta_disconnected.reason);
         break;
     default:
         break;
@@ -8521,20 +8518,9 @@ void taskNetwork(void *pvParameters)
         wifiMulti.setAllowOpenAP(false); // Default is false.  True adds open APs to the AP list.
     }
 
-    if (config.wifi_mode & WIFI_AP_FIX)
+    if ((config.wifi_mode & WIFI_AP_FIX) && !(config.wifi_mode & WIFI_STA_FIX))
     {
-        // manualWiFi = true;
-        log_d("Access point running. IP address: ");
-        log_d("%s", WiFi.softAPIP().toString().c_str());
-        // Start the Access Point
-        WiFi.AP.begin();
-        WiFi.AP.config(ap_ip, ap_ip, ap_mask, ap_leaseStart, ap_dns);
-        WiFi.AP.create(config.wifi_ap_ssid, config.wifi_ap_pass);
-        if (!WiFi.AP.waitStatusBits(ESP_NETIF_STARTED_BIT, 1000))
-        {
-            Serial.println("Failed to start AP!");
-            // return;
-        }
+        wifiApStart(); // AP only; in AP+STA mode wifiConnection() already started it
     }
 
     pingTimeout = millis64() + 10000;
@@ -8641,22 +8627,28 @@ void taskNetwork(void *pvParameters)
         {
             if (WiFi.isConnected() == false)
             {
-                if (millis64() > mitiWifiTimeout)
+                if (wifiStaConfigured() && millis64() > mitiWifiTimeout)
                 {
-                    mitiWifiTimeout = millis64() + 30000;
-                    log_d("WiFi Check Connection!");
-
-                    // Try to reconnect to current AP first for stability
-                    if(currentAPIndex >= 0 && config.wifi_sta[currentAPIndex].enable) {
-                        log_d("Reconnecting to current AP: %s", config.wifi_sta[currentAPIndex].wifi_ssid);
-                        wifiStatus = WiFi.begin(
-                            config.wifi_sta[currentAPIndex].wifi_ssid,
-                            config.wifi_sta[currentAPIndex].wifi_pass
-                        );
-                    } else {
-                        // Fallback to wifiMulti only if no current AP or current AP is disabled
-                        log_d("Using wifiMulti to find available AP");
-                        wifiStatus = wifiMulti.run();
+                    mitiWifiTimeout = millis64() + WIFI_RETRY_PERIOD_MS;
+                    wifiRetry++;
+                    if (wifiRetry >= WIFI_RETRY_FULL_RESET)
+                    {
+                        log_d("WiFi: %d failed attempts, full WiFi restart", wifiRetry);
+                        wifiRetry = 0;
+                        wifiConnection();
+                    }
+                    else if (currentAPIndex >= 0 && config.wifi_sta[currentAPIndex].enable &&
+                             (wifiRetry % WIFI_RETRY_SCAN_EVERY) != 0)
+                    {
+                        // Last AP first: fast and keeps the own AP up
+                        log_d("WiFi: reconnecting to %s (attempt %d)", config.wifi_sta[currentAPIndex].wifi_ssid, wifiRetry);
+                        WiFi.begin(config.wifi_sta[currentAPIndex].wifi_ssid,
+                                   config.wifi_sta[currentAPIndex].wifi_pass);
+                    }
+                    else
+                    {
+                        log_d("WiFi: scanning configured APs (attempt %d)", wifiRetry);
+                        wifiStatus = wifiMulti.run(5000);
                     }
                     vTaskDelay(2000 / portTICK_PERIOD_MS);
                 }
@@ -8664,6 +8656,12 @@ void taskNetwork(void *pvParameters)
             else
             {
                 wifiStatus = WL_CONNECTED;
+                if (wifiRetry > 0)
+                {
+                    log_d("WiFi: reconnected after %d attempts", wifiRetry);
+                    wifiRetry = 0;
+                    wifiTrackCurrentAP();
+                }
             }
         }
 #ifdef PPPOS
@@ -8910,56 +8908,34 @@ void taskNetwork(void *pvParameters)
                     log_d("Ping WiFi to %s\n", WiFi.gatewayIP().toString().c_str());
                     IPAddress wifiIP;
                     wifiIP.fromString(String(WiFi.gatewayIP().toString()));
+                    // Routers that don't answer ICMP must not trigger WiFi restarts while
+                    // data is clearly flowing (APRS-IS keepalives every ~20 s)
+                    bool isAlive = config.igate_en && aprsClient.connected() &&
+                                   (uint32_t)(millis() - lastIsRx) < 120000;
                     if (ping_start(wifiIP, 2, 0, 0, 10) == true)
                     {
                         log_d("Ping WiFi Success!!\n");
+                        pingFail = 0;
+                    }
+                    else if (isAlive)
+                    {
+                        log_d("Ping WiFi Fail, but APRS-IS is receiving: ignored\n");
+                        pingFail = 0;
                     }
                     else
                     {
-                        log_d("Ping WiFi Fail!\n");
-                        wifiConnection();
-                        // WiFi.disconnect(true, true, 500);
-                        // WiFi.persistent(false);
-                        // WiFi.mode(WIFI_OFF); // Switch WiFi off
-
-                        // wifiTTL = 0;
-                        // delay(3000);
-                        // if (config.wifi_mode == WIFI_STA_FIX)
-                        // { /**< WiFi station mode */
-                        //     WiFi.mode(WIFI_MODE_STA);
-                        //     //WiFi.setTxPower((wifi_power_t)config.wifi_power);
-                        // }
-                        // else if (config.wifi_mode == WIFI_AP_FIX)
-                        // { /**< WiFi soft-AP mode */
-                        //     WiFi.mode(WIFI_MODE_AP);
-                        //     //WiFi.setTxPower((wifi_power_t)config.wifi_power);
-                        // }
-                        // else if (config.wifi_mode == WIFI_AP_STA_FIX)
-                        // { /**< WiFi station + soft-AP mode */
-                        //     WiFi.mode(WIFI_MODE_APSTA);
-                        //     //WiFi.setTxPower((wifi_power_t)config.wifi_power);
-                        // }
-                        // else
-                        // {
-                        //     WiFi.mode(WIFI_MODE_NULL);
-                        // }
-                        // wifiMulti.APlistClean(); // Clean AP list
-                        // for (int i = 0; i < 5; i++)
-                        // {
-                        //     if (config.wifi_sta[i].enable)
-                        //     {
-                        //         wifiMulti.addAP(config.wifi_sta[i].wifi_ssid, config.wifi_sta[i].wifi_pass);
-                        //     }
-                        // }
-                        // WiFi.setHostname(config.host_name);
-                        // if (wifiMulti.run() == WL_CONNECTED)
-                        // {
-                        //     wifiDisCount=0;
-                        //     pingTimeout = millis64() + 60000;
-                        //     //NTP_Timeout = millis64() + 2000;
-                        // }
-                        // wifiMulti.run(5000,true); // Timeout 5 sec
-                        // WiFi.reconnect();
+                        pingFail++;
+                        log_d("Ping WiFi Fail! (%d)\n", pingFail);
+                        pingTimeout = millis64() + 60000; // re-check sooner
+                        if (pingFail >= PING_FAIL_FULL)
+                        {
+                            pingFail = 0;
+                            wifiConnection();
+                        }
+                        else if (pingFail >= PING_FAIL_SOFT)
+                        {
+                            WiFi.reconnect();
+                        }
                     }
                 }
 // if (config.vpn)
