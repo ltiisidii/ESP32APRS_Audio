@@ -216,9 +216,9 @@ int getRawWx(char *strData)
             if(wgIdx>=(sizeof(wgArray)/4)) wgIdx=0;
             wgArray[wgIdx++]=windspeed;
             weather.windgust=0.0F;
-            for(int i;i<(sizeof(wgArray)/4);i++)
+            for(int k = 0; k < (int)(sizeof(wgArray)/4); k++) // index was never initialized
             {
-                if(wgArray[i]>weather.windgust) weather.windgust=wgArray[i];
+                if(wgArray[k]>weather.windgust) weather.windgust=wgArray[k];
             }
             //getSensor(senType, &weather.windgust, i);
             break;

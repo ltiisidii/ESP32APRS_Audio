@@ -2133,7 +2133,7 @@ int ParseAPRS::parse_aprs_wx(struct pbuf_t *pb, char const *input, unsigned int 
 {
 	int flage = 0;
 	char wind_dir[4], wind_speed[4], wind_gust[4], temperature[4],temperature2[5], rain[4], rain24[4], rainMn[4], humidity[3],humidity2[4], barometric[6], luminosity[4], uv[3];
-	char snow[3], soil_temp[4], soil_hum[4], water_temp[4], water_tds[5], water_level[4], pm25[4], pm100[4], co2[5], ch2o[5], tvoc[5];
+	char snow[4], soil_temp[4], soil_hum[4], water_temp[4], water_tds[5], water_level[4], pm25[4], pm100[4], co2[5], ch2o[5], tvoc[5];
 	bool luminosityAbove = false;
 	bool co2Above = false;
 	bool ch2oAbove = false;

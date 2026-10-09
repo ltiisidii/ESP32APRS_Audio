@@ -66,7 +66,8 @@ along with VP-Digi.  If not, see <http://www.gnu.org/licenses/>.
 #define DCD300_TUNE 0.74f
 
 #define N1200 8 // samples per symbol @ fs=9600, oversampling = 38400 Hz
-#define N9600 1 // fs=38400, oversampling = 38400 Hz
+#define N9600 4 // fs=38400, 4 samples per symbol. Was 1: PLL9600_STEP became 2^32, which
+                // overflows the int32_t pllStep to 0, so the 9600 baud PLL never advanced
 #define N300 32 // fs=9600, oversampling = 38400 Hz
 #define NMAX 32 // keep this value equal to the biggest Nx
 
@@ -330,13 +331,15 @@ static inline uint8_t descramble(uint8_t in)
 	return bit;
 }
 
+static uint32_t lfsrTx = 0; // TX scrambler state (was shared with the RX descrambler)
+
 static inline uint8_t scramble(uint8_t in)
 {
 	// G3RUH scrambling (x^17+x^12+1)
-	uint8_t bit = ((lfsr & 0x10000) > 0) ^ ((lfsr & 0x800) > 0) ^ (in > 0);
+	uint8_t bit = ((lfsrTx & 0x10000) > 0) ^ ((lfsrTx & 0x800) > 0) ^ (in > 0);
 
-	lfsr <<= 1;
-	lfsr |= bit;
+	lfsrTx <<= 1;
+	lfsrTx |= bit;
 	return bit;
 }
 
@@ -389,11 +392,14 @@ uint8_t MODEM_BAUDRATE_TIMER_HANDLER(void)
 			currentSymbol ^= 1; // change symbol - NRZI encoding
 		}
 		sampleIndex = baudRateStep;
+		// G3RUH scrambler advances once per bit. It used to run on every DAC sample (4 per bit
+		// at 9600), so the transmitted 9600 baud signal could not be descrambled by anyone.
+		if (ModemConfig.modem == MODEM_9600)
+			scrambledSymbol = scramble(currentSymbol);
 	}
 
 	if (ModemConfig.modem == MODEM_9600)
 	{
-		scrambledSymbol = scramble(currentSymbol);
 		// if(ModemConfig.usePWM)
 		sinwave = scrambledSymbol ? 240 : 20;
 		// else
@@ -496,7 +502,9 @@ static int32_t demodulate(int16_t sample, struct DemodState *dem)
 
 	if ((sample > 0) != dem->dcdLastSymbol) // tone changed
 	{
-		if ((uint32_t)abs(dem->dcdPll) < (uint32_t)(dem->pllStep)) // tone change occurred near zero
+		// |dcdPll| as unsigned: abs(INT32_MIN) is undefined behaviour and the PLL counter wraps to it
+		uint32_t pllAbs = (dem->dcdPll < 0) ? (0u - (uint32_t)dem->dcdPll) : (uint32_t)dem->dcdPll;
+		if (pllAbs < (uint32_t)(dem->pllStep)) // tone change occurred near zero
 		{
 			dem->dcdCounter += dem->dcdInc;	   // increase DCD counter
 			if (dem->dcdCounter > dem->dcdMax) // maximum DCD counter value reached

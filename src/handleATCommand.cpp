@@ -148,7 +148,7 @@ String handleATCommand(String cmd)
         cmd.remove(0, 8);
         cmd.replace("\"", "");
         char strTime[20];
-        strncpy(strTime, cmd.c_str(), sizeof(strTime));
+        strlcpy(strTime, cmd.c_str(), sizeof(strTime)); // strncpy left it unterminated
         String date = getValue(strTime, ' ', 0);
         String time = getValue(strTime, ' ', 1);
         int yyyy = getValue(date, '-', 0).toInt();
