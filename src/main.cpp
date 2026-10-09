@@ -54,6 +54,11 @@
 #include "sensor.h"
 #include "supervisor.h"
 
+// Demodulator task priority. Was 0 (= idle): it only ran when nothing else wanted the CPU and
+// lost packets whenever the web server (async_tcp, prio 10) or the display were busy. It sleeps
+// a few ms every loop, so a high priority doesn't starve the other tasks.
+#define APRS_POLL_PRIORITY 11
+
 #include <rom/spi_flash.h>
 #include "FS.h"
 #include <LITTLEFS.h>
@@ -3905,17 +3910,13 @@ void setup()
         "taskAPRSPoll",      /* Name of the task */
         4096,                /* Stack size in words */
         NULL,                /* Task input parameter */
-        0,                   /* Priority of the task */
+        APRS_POLL_PRIORITY,  /* Priority of the task */
         &taskAPRSPollHandle, /* Task handle. */
         1);                  /* Core where the task should run */
     xTaskCreatePinnedToCore(
         taskAPRS,        /* Function to implement the task */
         "taskAPRS",      /* Name of the task */
-#if (CORE_DEBUG_LEVEL > 0)
-        8192,            /* Stack size in words (debug) */
-#else
-        4096,            /* Stack size in words */
-#endif
+        8192,            /* Stack size in bytes (was 4096 in release: too small) */
         NULL,            /* Task input parameter */
         2,               /* Priority of the task */
         &taskAPRSHandle, /* Task handle. */
@@ -3955,18 +3956,14 @@ void setup()
         "taskAPRSPoll",      /* Name of the task */
         4096,                /* Stack size in words */
         NULL,                /* Task input parameter */
-        0,                   /* Priority of the task */
+        APRS_POLL_PRIORITY,  /* Priority of the task */
         &taskAPRSPollHandle, /* Task handle. */
         0);                  /* Core where the task should run */
 
     xTaskCreatePinnedToCore(
         taskAPRS,        /* Function to implement the task */
         "taskAPRS",      /* Name of the task */
-        #if (CORE_DEBUG_LEVEL > 0)
-        8192,            /* Stack size in words */
-        #else
-        4096,            /* Stack size in words */
-        #endif
+        8192,            /* Stack size in bytes (was 4096 in release: too small) */
         NULL,            /* Task input parameter */
         2,               /* Priority of the task */
         &taskAPRSHandle, /* Task handle. */
@@ -3978,7 +3975,7 @@ void setup()
         xTaskCreatePinnedToCore(
             taskGPS,        /* Function to implement the task */
             "taskGPS",      /* Name of the task */
-            3072,           /* Stack size in words */
+            4096,           /* Stack size in bytes (was 3072) */
             NULL,           /* Task input parameter */
             4,              /* Priority of the task */
             &taskGPSHandle, /* Task handle. */
@@ -3990,7 +3987,7 @@ void setup()
         xTaskCreatePinnedToCore(
             taskSerial,        /* Function to implement the task */
             "taskSerial",      /* Name of the task */
-            2048,              /* Stack size in words */
+            6144,              /* Stack size in bytes (was 2048: rawP[500] + AT commands overflowed it) */
             NULL,              /* Task input parameter */
             5,                 /* Priority of the task */
             &taskSerialHandle, /* Task handle. */

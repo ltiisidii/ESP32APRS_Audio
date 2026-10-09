@@ -5,15 +5,22 @@
 #include <esp_task_wdt.h>
 #include <esp_ota_ops.h>
 #include <esp_attr.h>
+#include <esp_heap_caps.h>
 #include "supervisor.h"
 
 #define SV_CHECK_PERIOD_MS 1000
 #define SV_ADC_STALL_MS 30000      // RX audio sampling stopped
 #define SV_OTA_CONFIRM_MS 120000   // healthy run time before confirming a new OTA firmware
 #define SV_RESET_MAGIC 0x53555056  // "SUPV"
+#define SV_REPORT_MS 600000        // health report period in the log
 
 extern volatile uint32_t adcIsrCount; // AFSK.cpp, counts ADC sampling interrupts
 bool getTransmit();                   // AFSK.cpp, true while PTT/TX is active
+bool AFSK_SamplingExpected(void);     // AFSK.cpp, false while TX or squelch-gated ADC is off
+extern volatile uint32_t fifoOverflowCount; // AFSK.cpp, ADC samples dropped (FIFO full)
+
+extern TaskHandle_t taskNetworkHandle, taskAPRSHandle, taskAPRSPollHandle;
+extern TaskHandle_t taskSerialHandle, taskGPSHandle, taskSensorHandle;
 
 // Max time without a feed before restarting. Covers the longest legitimate blocking call
 // of each task (taskNetwork: WiFi reconnect, ping, APRS-IS/MQTT connect, PPP).
@@ -52,6 +59,28 @@ static void supervisorRestart(const char *reason)
     esp_restart();
 }
 
+static void reportStack(const char *name, TaskHandle_t h)
+{
+    if (h != NULL)
+        log_i("  stack free %-13s %5u bytes", name, (unsigned)uxTaskGetStackHighWaterMark(h));
+}
+
+// Periodic health line for long-run testing: heap, fragmentation, RX audio and stack margins
+static void supervisorReport(void)
+{
+    log_i("HEALTH up %lus heap %u min %u maxblk %u adc %u drop %u",
+          (unsigned long)(millis() / 1000), (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMinFreeHeap(),
+          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)adcIsrCount,
+          (unsigned)fifoOverflowCount);
+    reportStack("taskAPRS", taskAPRSHandle);
+    reportStack("taskAPRSPoll", taskAPRSPollHandle);
+    reportStack("taskNetwork", taskNetworkHandle);
+    reportStack("taskGPS", taskGPSHandle);
+    reportStack("taskSerial", taskSerialHandle);
+    reportStack("taskSensor", taskSensorHandle);
+    reportStack("taskSupervisor", xTaskGetCurrentTaskHandle());
+}
+
 static void otaConfirmIfPending(void)
 {
     const esp_partition_t *running = esp_ota_get_running_partition();
@@ -78,6 +107,7 @@ static void taskSupervisor(void *pvParameters)
     bool adcRunning = false; // only check the ADC once it has started at all
     bool otaDone = false;
     uint32_t startMs = millis();
+    uint32_t lastReport = millis();
 
     for (;;)
     {
@@ -105,9 +135,9 @@ static void taskSupervisor(void *pvParameters)
         }
 
         uint32_t adc = adcIsrCount;
-        if (getTransmit())
+        if (getTransmit() || !AFSK_SamplingExpected())
         {
-            lastAdcChange = now; // ADC sampling is paused during TX on the original ESP32
+            lastAdcChange = now; // sampling legitimately paused (TX, or squelch closed on ESP32)
         }
         else if (adc != lastAdcCount)
         {
@@ -118,6 +148,12 @@ static void taskSupervisor(void *pvParameters)
         else if (adcRunning && (uint32_t)(now - lastAdcChange) > SV_ADC_STALL_MS)
         {
             supervisorRestart("RX ADC sampling stopped");
+        }
+
+        if ((uint32_t)(now - lastReport) >= SV_REPORT_MS)
+        {
+            lastReport = now;
+            supervisorReport();
         }
 
         if (!otaDone && (uint32_t)(now - startMs) > SV_OTA_CONFIRM_MS)
