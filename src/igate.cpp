@@ -18,13 +18,21 @@ extern statusType status;
 static struct DupPacketCache dupCache[DUP_PACKET_CACHE_SIZE];
 static uint8_t dupCacheIndex = 0;
 
-// Simple hash function for packet deduplication
+// Packet hash for deduplication: 64-bit FNV-1a over source call, SSID and the whole info field.
+// The old one left bytes of hash[] uninitialized, could produce an early NUL (strncmp then
+// compared only a prefix) and only looked at the first 16 info bytes, so different packets from
+// the same station with the same length were dropped as duplicates.
 static void packetHash(AX25Msg &Packet, char *hash)
 {
-    sprintf(hash, "%s%d%d", Packet.src.call, Packet.src.ssid, Packet.len);
-    for(int i = 0; i < std::min(16, (int)Packet.len); i++) {
-        hash[i % 15] ^= Packet.info[i];
-    }
+    uint64_t h = 1469598103934665603ULL; // FNV offset basis
+    const uint64_t prime = 1099511628211ULL;
+    for (const char *c = Packet.src.call; *c; c++)
+        h = (h ^ (uint8_t)*c) * prime;
+    h = (h ^ (uint8_t)Packet.src.ssid) * prime;
+    for (size_t i = 0; i < Packet.len && i < sizeof(Packet.info); i++)
+        h = (h ^ Packet.info[i]) * prime;
+    memset(hash, 0, 16);
+    memcpy(hash, &h, sizeof(h));
 }
 
 bool isDuplicatePacket(AX25Msg &Packet)
@@ -36,14 +44,14 @@ bool isDuplicatePacket(AX25Msg &Packet)
     clearExpiredDuplicates();
 
     for(uint8_t i = 0; i < DUP_PACKET_CACHE_SIZE; i++) {
-        if(dupCache[i].timestamp > 0 && strncmp(dupCache[i].hash, hash, 16) == 0) {
-            log_d("Duplicate packet detected: %s", hash);
+        if(dupCache[i].timestamp > 0 && memcmp(dupCache[i].hash, hash, 16) == 0) {
+            log_d("Duplicate packet detected: %s-%d", Packet.src.call, Packet.src.ssid);
             return true;
         }
     }
 
     // Add to cache
-    strncpy(dupCache[dupCacheIndex].hash, hash, 16);
+    memcpy(dupCache[dupCacheIndex].hash, hash, 16);
     dupCache[dupCacheIndex].timestamp = now;
     dupCacheIndex = (dupCacheIndex + 1) % DUP_PACKET_CACHE_SIZE;
 
