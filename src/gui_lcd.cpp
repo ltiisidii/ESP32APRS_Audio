@@ -1731,11 +1731,11 @@ void on_aprsserver_selected(MenuItem *p_menu_item)
     cbBox.x = 53;
     cbBox.y = 40;
     cbBox.length = 8;
-    cbBox.AddItem(0, "CALLSIGN");   // g/HS*/E2*
-    cbBox.AddItem(1, "THAI MSG");   // g/HS*/E2*
-    cbBox.AddItem(2, "THAI ALL");   // b/HS*/E2*
-    cbBox.AddItem(3, "THAI IGATE"); // e/HS*/E2*
-    cbBox.AddItem(4, "THAI DIGI");  // d/HS*/E2*
+    cbBox.AddItem(0, "CALLSIGN");   // b/LU1ABC-9
+    cbBox.AddItem(1, "AR MSG");     // g/LU*/LW*
+    cbBox.AddItem(2, "AR ALL");     // b/LU*/LW*
+    cbBox.AddItem(3, "AR IGATE");   // e/LU*/LW*
+    cbBox.AddItem(4, "AR DIGI");    // d/LU*/LW*
     cbBox.AddItem(5, "NO RECV");    // m/1
     cbBox.maxItem(6);
     // cbBox.char_max = 999;
@@ -1807,19 +1807,19 @@ void on_aprsserver_selected(MenuItem *p_menu_item)
                     switch (cbBox.GetIndex())
                     {
                     case 0:
-                        strcpy(txtBox[2].text, "b/HS5TQA-9");
+                        strcpy(txtBox[2].text, "b/LU1ABC-9");
                         break;
                     case 1:
-                        strcpy(txtBox[2].text, "g/HS*/E2*");
+                        strcpy(txtBox[2].text, "g/LU*/LW*");
                         break;
                     case 2:
-                        strcpy(txtBox[2].text, "b/HS*/E2*");
+                        strcpy(txtBox[2].text, "b/LU*/LW*");
                         break;
                     case 3:
-                        strcpy(txtBox[2].text, "e/HS*/E2*");
+                        strcpy(txtBox[2].text, "e/LU*/LW*");
                         break;
                     case 4:
-                        strcpy(txtBox[2].text, "d/HS*/E2*");
+                        strcpy(txtBox[2].text, "d/LU*/LW*");
                         break;
                     case 5:
                         strcpy(txtBox[2].text, "m/1");

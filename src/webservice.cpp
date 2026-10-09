@@ -2729,30 +2729,7 @@ void handle_vpn(AsyncWebServerRequest *request)
 		strcat(html, "});\n");
 		strcat(html, "});\n");
 
-		// Get MAC address and remove colons
-		String ESP32_ID = WiFi.macAddress();
-		ESP32_ID.replace(":", "");
 		char temp_buffer[512];
-		snprintf(temp_buffer, sizeof(temp_buffer), "function loadVPNConfig() {\nconst url = \"http://hs1.hs5tqa.ampr.org:81/wg/create\";\nconst espID = {'name': '%s'};\n", ESP32_ID.c_str());
-		strcat(html, temp_buffer);
-		strcat(html, "fetch(url,{\n");
-		strcat(html, "method: 'POST',\n");
-		strcat(html, "body: JSON.stringify(espID),\n");
-		strcat(html, "headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Origin': '*','Access-Control-Allow-Methods': 'POST,GET,OPTIONS'}\n");
-		strcat(html, "})\n");
-		strcat(html, ".then(response => response.json())\n");
-		strcat(html, ".then(data => {\n");
-		strcat(html, "console.log(\"VPN Data:\", data);\n");
-		strcat(html, "document.getElementById(\"wg_enable\").checked = true;\n");
-		strcat(html, "document.getElementById(\"wg_peer_address\").value = data.Enpoint.split(\":\")[0];\n");
-		strcat(html, "document.getElementById(\"wg_port\").value = data.Enpoint.split(\":\")[1];\n");
-		strcat(html, "document.getElementById(\"wg_local_address\").value = data.Address;\n");
-		strcat(html, "document.getElementById(\"wg_netmask_address\").value = \"255.255.255.0\";\n");
-		strcat(html, "document.getElementById(\"wg_gw_address\").value = data.Gateway;\n");
-		strcat(html, "document.getElementById(\"wg_public_key\").value = data.PublicKey;\n");
-		strcat(html, "document.getElementById(\"wg_private_key\").value = data.PrivateKey;\n");
-		strcat(html, "})\n");
-		strcat(html, ".catch(err => console.error(\"VPN API Error:\", err));\n}\n");
 		strcat(html, "</script>\n");
 		// ===== JavaScript AJAX =====
 		// strcat(html, "<script>\n");
@@ -2845,34 +2822,6 @@ void handle_vpn(AsyncWebServerRequest *request)
 		strcat(html, "</td></tr></table><br />\n");
 		strcat(html, "</form><br /><br />");
 
-		strcat(html, "<form accept-charset=\"UTF-8\" action=\"#\" class=\"form-horizontal\" id=\"fromGetVPN\" method=\"post\">\n");
-		strcat(html, "<table>\n");
-		strcat(html, "<th colspan=\"2\"><span><b>Helper: Free VPN Wireguard for Web Service</b></span></th>\n");
-		strcat(html, "<tr><td align=\"left\">1. Click New Register button to get VPN config from web service.</td></tr>\n");
-		strcat(html, "<tr><td align=\"left\">2. The VPN config will fill in the form automatically.</td></tr>\n");
-		strcat(html, "<tr><td align=\"left\">3. Click Apply Change and reboot again.</td></tr>\n");
-		strcat(html, "<tr><td align=\"left\">4. Enjoy your free VPN service!</td></tr>\n");
-
-		// Check if local address starts with "10.44."
-		String wg_local_addr = String(config.wg_local_address);
-		if (wg_local_addr.startsWith("10.44."))
-		{
-			int lastoct = wg_local_addr.substring(wg_local_addr.lastIndexOf('.') + 1).toInt();
-			// String url="http://"+String(config.wg_peer_address)+":"+String(8000+lastoct);
-			// strcat(html, "<tr><td>Your External Host IP: <a href=\"");
-			// snprintf(temp_buffer, sizeof(temp_buffer), "%s\">%s</a></td></tr>\n", url.c_str(), url.c_str());
-			// strcat(html, temp_buffer);
-			int thirdoct = wg_local_addr.substring(wg_local_addr.indexOf('.', wg_local_addr.indexOf('.') + 1) + 1, wg_local_addr.lastIndexOf('.')).toInt();
-			String url_base = "http://hs" + String(thirdoct) + ".hs5tqa.ampr.org:" + String((thirdoct * 10000) + 8000 + lastoct);
-			snprintf(temp_buffer, sizeof(temp_buffer), "<tr><td>Your External by AMPR URL: <a href=\"%s\" target=\"_blank\">%s</a></td></tr>\n", url_base.c_str(), url_base.c_str());
-			strcat(html, temp_buffer);
-			url_base = "http://vpn.nakhonthai.net:" + String((thirdoct * 10000) + 8000 + lastoct);
-			snprintf(temp_buffer, sizeof(temp_buffer), "<tr><td>Fast Direct URL: <a href=\"%s\" target=\"_blank\">%s</a></td></tr>\n", url_base.c_str(), url_base.c_str());
-			strcat(html, temp_buffer);
-		}
-		strcat(html, "<tr><td><button type=\"button\" onclick=\"loadVPNConfig()\">New Register</button></td></tr>\n");
-		strcat(html, "</table><br />\n");
-		strcat(html, "</form>");
 
 		// request->send(200, "text/html", html); // send to someones browser when asked
 		AsyncWebServerResponse *response = request->beginResponse(200, "text/html", (const char *)html);
@@ -3454,7 +3403,7 @@ void handle_msg(AsyncWebServerRequest *request)
 		strcat(html, "<tr>\n");
 		strcat(html, "<td align=\"right\"><b>My Callsign:</b></td>\n");
 		char temp_buffer[512];
-		snprintf(temp_buffer, sizeof(temp_buffer), "<td style=\"text-align: left;\"><input  size=\"20\" maxlength=\"9\" name=\"mycall\" type=\"text\" value=\"%s\" /> *<i>Callsign with SSID (Ex. HS5TQA-12)</i></td>\n", config.msg_mycall);
+		snprintf(temp_buffer, sizeof(temp_buffer), "<td style=\"text-align: left;\"><input  size=\"20\" maxlength=\"9\" name=\"mycall\" type=\"text\" value=\"%s\" /> *<i>Callsign with SSID (Ex. LU1ABC-12)</i></td>\n", config.msg_mycall);
 		strcat(html, temp_buffer);
 		strcat(html, "</tr>\n");
 
@@ -7516,12 +7465,12 @@ void handle_igate(AsyncWebServerRequest *request)
 		strcat(html, "</tr>\n");
 		strcat(html, "<tr>\n");
 		strcat(html, "<td align=\"right\"><b>Server Host:</b></td>\n");
-		snprintf(tempHtml, sizeof(tempHtml), "<td style=\"text-align: left;\"><input maxlength=\"20\" size=\"20\" id=\"aprsHost\" name=\"aprsHost\" type=\"text\" value=\"%s\" /> *APRS-IS by T2THAI at <a href=\"http://aprs.nakhonthai.net:14501\" target=\"_t2thai\">aprs.nakhonthai.net:14580</a>,CBAPRS at <a href=\"http://aprs.nakhonthai.net:24501\" target=\"_t2thai\">aprs.nakhonthai.net:24580</a></td>\n", config.aprs_host);
+		snprintf(tempHtml, sizeof(tempHtml), "<td style=\"text-align: left;\"><input maxlength=\"20\" size=\"20\" id=\"aprsHost\" name=\"aprsHost\" type=\"text\" value=\"%s\" /> *Ex. rotate.aprs2.net (<a href=\"http://www.aprs2.net\" target=\"_aprs2\">aprs2.net</a>)</td>\n", config.aprs_host);
 		strcat(html, tempHtml);
 		strcat(html, "</tr>\n");
 		strcat(html, "<tr>\n");
 		strcat(html, "<td align=\"right\"><b>Server Port:</b></td>\n");
-		snprintf(tempHtml, sizeof(tempHtml), "<td style=\"text-align: left;\"><input min=\"1\" max=\"65535\" step=\"1\" id=\"aprsPort\" name=\"aprsPort\" type=\"number\" value=\"%d\" /> *AMPR Host at <a href=\"http://aprs.hs5tqa.ampr.org:14501\" target=\"_t2thai\">aprs.hs5tqa.ampr.org:14580</a></td>\n", config.aprs_port);
+		snprintf(tempHtml, sizeof(tempHtml), "<td style=\"text-align: left;\"><input min=\"1\" max=\"65535\" step=\"1\" id=\"aprsPort\" name=\"aprsPort\" type=\"number\" value=\"%d\" /> *14580 = filtered port (uses the filter setting)</td>\n", config.aprs_port);
 		strcat(html, tempHtml);
 		strcat(html, "</tr>\n");
 		strcat(html, "<tr>\n");
@@ -11485,13 +11434,25 @@ void handle_ota_url(AsyncWebServerRequest *request)
 
 // Remote version file published by copy_firmware.py, checked against the
 // running VERSION/VERSION_BUILD to let the "about" page report new releases.
-#define VERSION_CHECK_URL "http://fw.nakhonthai.net/Audio/version.json"
+// Base URL of your own firmware server (with trailing "/"). It must serve version.json and the
+// .bin files named like FirmwareOTA in handle_about(). Empty = online OTA disabled: the device
+// never contacts any firmware server. Can also be set with -DOTA_SERVER_URL='"http://..."'.
+#ifndef OTA_SERVER_URL
+#define OTA_SERVER_URL ""
+#endif
+#define VERSION_CHECK_URL OTA_SERVER_URL "version.json"
 
 void handle_check_version(AsyncWebServerRequest *request)
 {
 	if (!request->authenticate(config.http_username, config.http_password))
 	{
 		return request->requestAuthentication();
+	}
+
+	if (OTA_SERVER_URL[0] == 0)
+	{
+		request->send(404, "application/json", "{\"error\":\"Online OTA not configured\"}");
+		return;
 	}
 
 	HTTPClient http;
@@ -11844,7 +11805,7 @@ void handle_about(AsyncWebServerRequest *request)
 	strcat(webString, "<th colspan=\"2\"><span><b>Manual Firmware Update</b></span></th>\n");
 	strcat(webString, "<tr><td align=\"right\"><b>File:</b></td><td align=\"left\"><input id=\"file\" name=\"update\" type=\"file\" onchange='sub(this)' /></td></tr>\n");
 	strcat(webString, "<tr><td align=\"right\"><b>Progress:</b></td><td><div id='prgbar'><div id='bar' style=\"width: 0px;\"><label id='prg'></label></div></div></td></tr>\n");
-	strcat(webString, "<tr><td align=\"right\"><b>Support Firmware:</b></td><td align=\"left\"><a target=\"_download\" href=\"https://github.com/nakhonthai/ESP32APRS_LoRa/releases\">https://github.com/nakhonthai/ESP32APRS_LoRa/releases</a></td></tr>\n");
+	strcat(webString, "<tr><td align=\"right\"><b>Support Firmware:</b></td><td align=\"left\"><a target=\"_download\" href=\"https://github.com/ltiisidii/ESP32APRS_Audio/releases\">https://github.com/ltiisidii/ESP32APRS_Audio/releases</a></td></tr>\n");
 	
 	strcat(webString, "<tr><td colspan=\"2\" align=\"right\"><div class=\"col-sm-3 col-xs-4\"><input type='submit' class=\"btn btn-danger\" id=\"update_sumbit\" value='Firmware UpLoad'></div></td></tr>\n");
 	strcat(webString, "</table><br />\n");
@@ -11887,9 +11848,15 @@ void handle_about(AsyncWebServerRequest *request)
 					  "});"
 					  "</script>");
 
+	if (OTA_SERVER_URL[0] == 0)
+	{
+		strcat(webString, "<table><th><span><b>OTA Online Firmware Update</b></span></th>\n"
+						  "<tr><td align=\"left\">Disabled: no firmware server configured (OTA_SERVER_URL).</td></tr></table><br />\n");
+	}
+	else
 	{
 		char ota_url_buf[200];
-		snprintf(ota_url_buf, sizeof(ota_url_buf), "http://fw.nakhonthai.net/Audio/%s", FirmwareOTA);
+		snprintf(ota_url_buf, sizeof(ota_url_buf), OTA_SERVER_URL "%s", FirmwareOTA);
 
 		// Derive the board-specific firmware name prefix (FirmwareOTA minus the
 		// trailing "_V<ver><build>.bin") so the client JS can rebuild the filename
@@ -11941,6 +11908,7 @@ void handle_about(AsyncWebServerRequest *request)
 	// strcat(webString, "<tr><td colspan=\"2\" align=\"right\"><div class=\"col-sm-3 col-xs-4\"><input type='button' class=\"btn btn-danger\" id=\"check_ver_btn\" value='Check New Version'></div></td></tr>\n");
 	// strcat(webString, "</table><br />\n");
 
+	if (OTA_SERVER_URL[0] != 0) // the buttons only exist when online OTA is configured
 	strcat(webString, "<script>"
 					  "document.getElementById('check_ver_btn').addEventListener('click', function(){"
 					  "document.getElementById('check_ver_btn').disabled = true;"
@@ -11955,7 +11923,7 @@ void handle_about(AsyncWebServerRequest *request)
 					  "var noDotVer = d.latest_version.replace(/\\./g, '');"
 					  "var prefix = document.getElementById('fw_prefix').value;"
 					  "var newFile = prefix + '_V' + noDotVer + d.latest_build + '.bin';"
-					  "var newUrl = 'http://fw.nakhonthai.net/Audio/' + newFile;"
+					  "var newUrl = '" OTA_SERVER_URL "' + newFile;"
 					  "var fwLink = document.getElementById('fw_file_link');"
 					  "fwLink.href = newUrl;"
 					  "fwLink.innerHTML = newFile;"
@@ -11973,6 +11941,7 @@ void handle_about(AsyncWebServerRequest *request)
 					  "});"
 					  "</script>");
 
+	if (OTA_SERVER_URL[0] != 0)
 	strcat(webString, "<script>"
 					  "document.getElementById('ota_sumbit').addEventListener('click', function(){"
 					  "if (!confirm('Download and install firmware from URL?\\n' + document.getElementById('ota_url').value)) return;"
