@@ -207,7 +207,7 @@ This fork has two levels of testing:
 
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/test-results-dark.png">
-    <img alt="Bar charts: frames decoded by the ESP32APRS_Audio firmware and by Dire Wolf 1.6. Packets from Dire Wolf with rising noise, out of 100: 1200 AFSK 75 vs 67, 300 AFSK 66 vs 68, 9600 G3RUH 44 vs 61, 1200 FX.25 97 vs 76. WA8LMF TNC Test CD: track 1 1006 vs 993, track 2 997 vs 988." src="docs/images/test-results-light.png" width="720">
+    <img alt="Bar charts: frames decoded by the ESP32APRS_Audio firmware and by Dire Wolf 1.6. Packets from Dire Wolf with rising noise, out of 100: 1200 AFSK 75 vs 67, 300 AFSK 66 vs 68, 9600 G3RUH 44 vs 61, 1200 V.23 80 vs 77, 1200 FX.25 97 vs 76. WA8LMF TNC Test CD: track 1 1006 vs 993, track 2 997 vs 988." src="docs/images/test-results-light.png" width="720">
   </picture>
 - **Hardware test plan** — [docs/test-plan.md](docs/test-plan.md).
   Decoding (WA8LMF TNC Test CD), long-run stability, stress and recovery, and physical

@@ -18,6 +18,7 @@ INTEROP = [  # 100 frames from Dire Wolf gen_packets, noise increasing frame by 
     ("1200 AFSK", 75, 67),
     ("300 AFSK (HF)", 66, 68),
     ("9600 G3RUH", 44, 61),
+    ("1200 V.23", 80, 77),
     ("1200 FX.25", 97, 76),
 ]
 WA8LMF = [  # frames decoded; Dire Wolf = its default decoder ("-P E", no bit fix-up)
@@ -81,7 +82,7 @@ def panel(fig, rect, rows, xmax, xticks, title, subtitle, t):
 def draw(theme, path):
     t = THEMES[theme]
     plt.rcParams["font.family"] = "DejaVu Sans"
-    fig = plt.figure(figsize=(9.6, 6.4), dpi=DPI, facecolor=t["surface"])
+    fig = plt.figure(figsize=(9.6, 6.9), dpi=DPI, facecolor=t["surface"])
     fig.text(0.03, 0.955, "ESP32APRS_Audio demodulator vs. Dire Wolf", fontsize=14.5, fontweight="bold",
              color=t["ink"])
     # legend (identity is never color alone: swatch + name)
@@ -91,7 +92,7 @@ def draw(theme, path):
                                           transform=fig.transFigure, facecolor=color, edgecolor="none"))
         fig.text(lx + 0.026, ly + 0.012, name, fontsize=10.5, color=t["ink"], va="center")
         lx += 0.30
-    panel(fig, [0.25, 0.47, 0.69, 0.30], INTEROP, 110, [0, 25, 50, 75, 100],
+    panel(fig, [0.25, 0.44, 0.69, 0.35], INTEROP, 110, [0, 25, 50, 75, 100],
           "Packets from another TNC, noise rising",
           "Frames decoded out of 100 (Dire Wolf gen_packets -n 100)", t)
     panel(fig, [0.25, 0.10, 0.69, 0.17], WA8LMF, 1150, [0, 250, 500, 750, 1000],
