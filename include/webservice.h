@@ -105,7 +105,7 @@ extern fs::LITTLEFSFS LITTLEFS;
 extern double VBat;
 extern double TempNTC;
 extern bool lastHeard_Flag;
-extern unsigned long lastHeardTimeout;
+extern uint64_t lastHeardTimeout;
 extern SensorData sen[SENSOR_NUMBER];
 extern uint16_t TLM_SEQ;
 extern uint16_t IGATE_TLM_SEQ;

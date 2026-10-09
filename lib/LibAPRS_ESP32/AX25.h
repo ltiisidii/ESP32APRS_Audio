@@ -27,6 +27,8 @@ along with VP-Digi.  If not, see <http://www.gnu.org/licenses/>.
 #define AX25_NOT_FX25 255
 
 //for AX.25 329 bytes is the theoretical max size assuming 2-byte Control, 1-byte PID, 256-byte info field and 8 digi address fields
+#include "millis64.h"
+
 #define AX25_FRAME_MAX_SIZE (329) //single frame max length
 
 enum Ax25RxStage

@@ -101,7 +101,7 @@ typedef struct SensorData_Struct
     uint16_t counter;
     unsigned long int timeSample;
     unsigned long int timeAvg;
-    unsigned long int timeTick;
+    uint64_t timeTick; // millis64() deadline
 } SensorData;
 
 void dispSensor();

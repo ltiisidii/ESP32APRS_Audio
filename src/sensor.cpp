@@ -178,7 +178,7 @@ bool sensorUpdateSum(int i, double val)
     sen[i].sum += sample;
     sen[i].counter++;
     sen[i].timeSample = millis();
-    sen[i].timeTick = millis() + ((unsigned long)config.sensor[i].samplerate * 1000);
+    sen[i].timeTick = millis64() + ((unsigned long)config.sensor[i].samplerate * 1000);
     if ((millis() - sen[i].timeAvg) > (config.sensor[i].averagerate * 1000))
     {
         if (sen[i].counter > 0)
@@ -202,7 +202,7 @@ bool sensorUpdate(int i, double val)
     sen[i].sum += sen[i].sample;
     sen[i].counter++;
     sen[i].timeSample = millis();
-    sen[i].timeTick = millis() + ((unsigned long)config.sensor[i].samplerate * 1000);
+    sen[i].timeTick = millis64() + ((unsigned long)config.sensor[i].samplerate * 1000);
     if ((millis() - sen[i].timeAvg) > (config.sensor[i].averagerate * 1000))
     {
         if (sen[i].counter > 0)
@@ -667,7 +667,7 @@ bool getM702Modbus(ModbusMaster &node)
                 sen[i].sum += sen[i].sample;
                 sen[i].counter++;
                 sen[i].timeSample = millis();
-                sen[i].timeTick = millis() + ((unsigned long)config.sensor[i].samplerate * 1000);
+                sen[i].timeTick = millis64() + ((unsigned long)config.sensor[i].samplerate * 1000);
                 if ((millis() - sen[i].timeAvg) > ((unsigned long)config.sensor[i].averagerate * 1000))
                 {
                     if (sen[i].counter > 0)
@@ -687,7 +687,7 @@ bool getM702Modbus(ModbusMaster &node)
                 sen[i].sum += sen[i].sample;
                 sen[i].counter++;
                 sen[i].timeSample = millis();
-                sen[i].timeTick = millis() + ((unsigned long)config.sensor[i].samplerate * 1000);
+                sen[i].timeTick = millis64() + ((unsigned long)config.sensor[i].samplerate * 1000);
                 if ((millis() - sen[i].timeAvg) > ((unsigned long)config.sensor[i].averagerate * 1000))
                 {
                     if (sen[i].counter > 0)
@@ -707,7 +707,7 @@ bool getM702Modbus(ModbusMaster &node)
                 sen[i].sum += sen[i].sample;
                 sen[i].counter++;
                 sen[i].timeSample = millis();
-                sen[i].timeTick = millis() + ((unsigned long)config.sensor[i].samplerate * 1000);
+                sen[i].timeTick = millis64() + ((unsigned long)config.sensor[i].samplerate * 1000);
                 if ((millis() - sen[i].timeAvg) > ((unsigned long)config.sensor[i].averagerate * 1000))
                 {
                     if (sen[i].counter > 0)
@@ -727,7 +727,7 @@ bool getM702Modbus(ModbusMaster &node)
                 sen[i].sum += sen[i].sample;
                 sen[i].counter++;
                 sen[i].timeSample = millis();
-                sen[i].timeTick = millis() + ((unsigned long)config.sensor[i].samplerate * 1000);
+                sen[i].timeTick = millis64() + ((unsigned long)config.sensor[i].samplerate * 1000);
                 if ((millis() - sen[i].timeAvg) > ((unsigned long)config.sensor[i].averagerate * 1000))
                 {
                     if (sen[i].counter > 0)
@@ -747,7 +747,7 @@ bool getM702Modbus(ModbusMaster &node)
                 sen[i].sum += sen[i].sample;
                 sen[i].counter++;
                 sen[i].timeSample = millis();
-                sen[i].timeTick = millis() + ((unsigned long)config.sensor[i].samplerate * 1000);
+                sen[i].timeTick = millis64() + ((unsigned long)config.sensor[i].samplerate * 1000);
                 if ((millis() - sen[i].timeAvg) > ((unsigned long)config.sensor[i].averagerate * 1000))
                 {
                     if (sen[i].counter > 0)
@@ -1462,7 +1462,7 @@ void taskSensor(void *pvParameters)
     for (;;)
     {
         vTaskDelay(100 / portTICK_PERIOD_MS);
-        unsigned long tick=millis();
+        uint64_t tick = millis64();
         for (int i = 0; i < SENSOR_NUMBER; i++)
         {
             if (config.sensor[i].enable)
@@ -1470,11 +1470,11 @@ void taskSensor(void *pvParameters)
                 if (tick > sen[i].timeTick)
                 {
                     if(getSensor(i)){
-                        sen[i].timeTick = millis() + ((unsigned long)config.sensor[i].samplerate * 1000);
+                        sen[i].timeTick = millis64() + ((unsigned long)config.sensor[i].samplerate * 1000);
                     }else{
-                        sen[i].timeTick = millis() + (30 * 1000);
+                        sen[i].timeTick = millis64() + (30 * 1000);
                     }
-                    log_d("Request getSensor [%d] for %s timeTick=%d/%d", i, config.sensor[i].parm,tick,sen[i].timeTick);
+                    log_d("Request getSensor [%d] for %s timeTick=%llu/%llu", i, config.sensor[i].parm, tick, sen[i].timeTick);
                     //dispSensor(i);
                     //vTaskDelay(10 / portTICK_PERIOD_MS);
                 }

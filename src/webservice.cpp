@@ -129,7 +129,7 @@ AsyncEventSource message_events("/eventMsg");
 
 char *webString;
 
-extern unsigned long waitISRetry;
+extern uint64_t waitISRetry;
 extern volatile int8_t adcEn;
 extern volatile int8_t dacEn;
 extern unsigned long upTimeStamp;
@@ -775,7 +775,7 @@ void handle_dashboard(AsyncWebServerRequest *request)
 	response->addHeader("Cache-Control", "no-cache");
 	request->send(response);
 	free(webString);
-	lastHeardTimeout = millis() + 500;
+	lastHeardTimeout = millis64() + 500;
 	lastHeard_Flag = true;
 }
 

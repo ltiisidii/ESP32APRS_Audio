@@ -116,7 +116,7 @@ int8_t _led_rx_pin = 2;
 int8_t _led_tx_pin = 4;
 int8_t _led_strip_pin = -1;
 uint8_t r_old = 0, g_old = 0, b_old = 0;
-unsigned long rgbTimeout = 0;
+uint64_t rgbTimeout = 0;
 
 #include <Adafruit_NeoPixel.h>
 extern Adafruit_NeoPixel *strip;
@@ -293,13 +293,13 @@ void LED_Status2(uint8_t r, uint8_t g, uint8_t b)
   // portENTER_CRITICAL_ISR(&ledMux);          // ISR start
   if (r == r_old && g == g_old && b == b_old)
   {
-    rgbTimeout = millis() + 100;
+    rgbTimeout = millis64() + 100;
   }
   else
   {
-    if (millis() > rgbTimeout)
+    if (millis64() > rgbTimeout)
     {
-      rgbTimeout = millis() + 100;
+      rgbTimeout = millis64() + 100;
       r_old = r;
       g_old = g;
       b_old = b;

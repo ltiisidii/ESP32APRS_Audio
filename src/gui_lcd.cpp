@@ -44,7 +44,7 @@ unsigned char encoder_A = 0;
 unsigned char encoder_A_prev = 0;
 RTC_DATA_ATTR char curTab = 0;
 int posNow = 0;
-int timeHalfSec = 0;
+uint64_t timeHalfSec = 0; // millis64() deadline
 int line = 16;
 
 RTC_DATA_ATTR uint8_t gps_mode = 0;
@@ -6289,7 +6289,7 @@ void mainDisp(void *pvParameters)
         }
 
         i2c_busy = true;
-        if (millis() > (saveTimeout + 300000))
+        if ((millis() - saveTimeout) > 300000)
         {
             //powerSave();
         }
@@ -6329,10 +6329,10 @@ void mainDisp(void *pvParameters)
                 }
             }
 
-            if (millis() > (unsigned long)timeHalfSec)
+            if (millis64() > timeHalfSec)
             {
 
-                timeHalfSec = millis() + 500 + disp_delay;
+                timeHalfSec = millis64() + 500 + disp_delay;
                 // powerWakeup();
                 disp_delay = 0;
                 dispMode = 0;
@@ -6392,7 +6392,7 @@ void mainDisp(void *pvParameters)
             {
                 if (encoder0Pos != posNow)
                 {
-                    timeHalfSec = millis() + 2000 + disp_delay;
+                    timeHalfSec = millis64() + 2000 + disp_delay;
                     saveTimeout = millis();
                     pkgListType pkg = getPkgList(selTab);
                     if (config.dim == 2)
@@ -6471,7 +6471,7 @@ void mainDisp(void *pvParameters)
                 { // Select MODE Decode/RAW
                     dispPush = false;
                     disp_delay = config.dispDelay * 1000;
-                    timeHalfSec = millis() + disp_delay;
+                    timeHalfSec = millis64() + disp_delay;
                     if (dispMode == 0)
                         dispMode = 1;
                     else
@@ -6532,7 +6532,7 @@ void mainDisp(void *pvParameters)
         if (conStat == CON_MENU)
         {
             delay(10);
-            if (millis() > (menuTimeout + 60000L))
+            if ((millis() - menuTimeout) > 60000L)
             {
                 menuTimeout = millis();
                 conStat = CON_NORMAL;
@@ -6689,7 +6689,7 @@ void dispTxWindow(txDisp txs)
 
     display.clearDisplay();
     disp_delay = config.dispDelay * 1000;
-    timeHalfSec = millis() + disp_delay;
+    timeHalfSec = millis64() + disp_delay;
     // send_aprs_table = txs.table;
     // send_aprs_symbol = txs.symbol;
 
@@ -6979,7 +6979,7 @@ void dispWindow(String line, uint8_t mode, bool filter)
             {
                 disp_delay = config.dispDelay * 1000;
             }
-            timeHalfSec = millis() + disp_delay;
+            timeHalfSec = millis64() + disp_delay;
             // display.fillRect(0, 0, 128, 16, WHITE);
             const uint8_t *ptrSymbol;
             uint8_t symIdx = aprs.symbol[1] - 0x21;
