@@ -189,6 +189,27 @@ https://www.espressif.com/en/support/download/other-tools
 8. Click (→) to upload firmware and reboot again
 9. After reboot display monitor and reconfig
 
+## Testing
+
+This fork has two levels of testing:
+
+- **Automated tests on a PC (no hardware)** — [test/host/README.md](test/host/README.md).
+  The firmware's real AX.25, AFSK/FX.25 modem, configuration and digipeater code is compiled for
+  a PC and run with AddressSanitizer and UndefinedBehaviorSanitizer: modem loopback at
+  1200/300/9600 baud, decode rate vs. noise, configuration save with simulated power cuts,
+  digipeater path handling. Run them with Docker Desktop:
+  ```powershell
+  powershell -File test\hostun.ps1
+  ```
+  The same folder has `wav_decode`, which runs audio recordings (e.g. the WA8LMF TNC Test CD)
+  through the firmware's demodulator.
+- **Hardware test plan** — [docs/test-plan.md](docs/test-plan.md).
+  Decoding (WA8LMF TNC Test CD), long-run stability, stress and recovery, and physical
+  environment tests, to qualify a station for unattended operation and compare it with a
+  dedicated TNC such as the Kantronics KPC-3+.
+
+All 13 PlatformIO environments in `platformio.ini` are expected to build.
+
 ## APRS Server service
 
 - APRS SERVER of T2THAI at [aprs.dprns.com:14580](http://aprs.dprns.com:14501), CBAPRS at [aprs.dprns.com:24580](http://aprs.dprns.com:24501)
