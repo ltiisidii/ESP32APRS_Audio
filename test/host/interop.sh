@@ -15,6 +15,12 @@ N=100
 
 ours() { ./build/wav_decode "$@" | sed -n 's/.*: \([0-9]*\) frames decoded/\1/p'; }
 dw()   { atest "$@" 2>/dev/null | sed -n 's/^\([0-9]*\) packets decoded.*/\1/p' | tail -1; }
+# V.23 (1300/2100 Hz): atest only knows the standard tones, so run the full direwolf with a custom
+# MODEM line, feeding the WAV's samples on stdin. Args: wav-file sample-rate
+dwv23() {
+    printf 'ADEVICE stdin null\nARATE %s\nCHANNEL 0\nMODEM 1200 1300:2100\n' "$2" > $W/v23.conf
+    tail -c +45 "$1" | timeout 300 direwolf -c $W/v23.conf -t 0 -q hd - 2>/dev/null | grep -c '^\[0' || true
+}
 
 echo "mode,direction,frames,direwolf,firmware" > build/interop.csv
 row() { printf "%-14s %-26s %3s sent | Dire Wolf %3s | firmware %3s\n" "$1" "$2" "$3" "$4" "$5"; echo "$1,$2,$3,$4,$5" >> build/interop.csv; }
@@ -29,7 +35,7 @@ row "9600 G3RUH" "RX (Dire Wolf -> firmware)" $N "$(dw -B 9600 $W/dw9600.wav)" "
 gen_packets -B 1200 -X 32 -n $N -o $W/dwfx25.wav >/dev/null 2>&1
 row "1200 FX.25" "RX (Dire Wolf -> firmware)" $N "$(dw -B 1200 $W/dwfx25.wav)" "$(ours $W/dwfx25.wav 1200 flat)"
 gen_packets -b 1200 -m 1300 -s 2100 -n $N -o $W/dwv23.wav >/dev/null 2>&1
-row "1200 V.23" "RX (Dire Wolf -> firmware)" $N "-" "$(ours $W/dwv23.wav v23 flat)"
+row "1200 V.23" "RX (Dire Wolf -> firmware)" $N "$(dwv23 $W/dwv23.wav 44100)" "$(ours $W/dwv23.wav v23 flat)"
 
 # --- TX: the firmware transmits (100 clean frames), Dire Wolf decodes
 ./build/wav_decode --tx $W/fw1200.wav 1200 $N >/dev/null
@@ -38,5 +44,7 @@ row "1200 AFSK" "TX (firmware -> Dire Wolf)" $N "$(dw -B 1200 $W/fw1200.wav)" "$
 row "300 AFSK" "TX (firmware -> Dire Wolf)" $N "$(dw -B 300 $W/fw300.wav)" "$(ours $W/fw300.wav 300 flat)"
 ./build/wav_decode --tx $W/fw9600.wav 9600 $N >/dev/null
 row "9600 G3RUH" "TX (firmware -> Dire Wolf)" $N "$(dw -B 9600 $W/fw9600.wav)" "$(ours $W/fw9600.wav 9600)"
+./build/wav_decode --tx $W/fwv23.wav v23 $N >/dev/null
+row "1200 V.23" "TX (firmware -> Dire Wolf)" $N "$(dwv23 $W/fwv23.wav 38400)" "$(ours $W/fwv23.wav v23 flat)"
 ./build/wav_decode --tx $W/fwfx25.wav 1200 fx25 $N >/dev/null
 row "1200 FX.25" "TX (firmware -> Dire Wolf)" $N "$(dw -B 1200 $W/fwfx25.wav)" "$(ours $W/fwfx25.wav 1200 flat)"
