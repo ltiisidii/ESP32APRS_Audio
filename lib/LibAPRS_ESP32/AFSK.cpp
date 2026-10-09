@@ -495,6 +495,9 @@ void afskSetADCAtten(uint8_t val)
     cfg_adc_atten = ADC_ATTENDB_MAX;
     Vref = 3300;
   }
+  // The pin must be registered as an ADC pin first (done by analogRead), otherwise the core
+  // rejects the call ("Pin is not configured as analog channel") and the setting is ignored
+  analogRead(adc_pins[0]);
   analogSetPinAttenuation(adc_pins[0], cfg_adc_atten);
 }
 #else
@@ -1318,6 +1321,7 @@ void AFSK_hw_init(void)
 #ifdef ADC_SAMPLE
   pinMode(15, OUTPUT);
   analogReadResolution(12);
+  analogRead(adc_pins[0]); // register the pin as ADC before setting its attenuation
   analogSetPinAttenuation(adc_pins[0], cfg_adc_atten);
   timer_adc = timerBegin(20000000);
   // Attach onTimer function to our timer.

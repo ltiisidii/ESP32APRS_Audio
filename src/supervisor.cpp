@@ -126,7 +126,7 @@ static void taskSupervisor(void *pvParameters)
                 svLastFeed[i] = now | 1; // deliberately suspended (e.g. WiFi OFF from the menu)
                 continue;
             }
-            if ((uint32_t)(now - last) > svLimitMs[i])
+            if (svStalled(now, last, svLimitMs[i]))
             {
                 char reason[48];
                 snprintf(reason, sizeof(reason), "%s stalled %us", svName[i], (unsigned)((now - last) / 1000));
