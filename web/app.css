@@ -39,3 +39,22 @@ button.danger:hover{border-color:var(--bad);color:var(--bad)}
   .grid{grid-template-columns:1fr}
 }
 .muted{color:var(--muted)}
+.wide{margin-top:10px}
+.card h2 a{text-transform:none;margin-left:6px}
+.scroll{overflow-x:auto}
+table.list{width:100%;border-collapse:collapse;white-space:nowrap}
+.list th{position:sticky;top:0;text-align:left;padding:5px 8px;background:var(--panel);color:var(--muted);font-weight:600;border-bottom:1px solid var(--line);cursor:pointer;user-select:none}
+.list td{padding:3px 8px;border-bottom:1px solid var(--line)}
+.list tbody tr:hover{background:#1d232b}
+.list td.ic{padding:1px 4px;width:24px}
+.list td.ic img{display:block}
+.list td.path{white-space:normal;word-break:break-all;color:var(--muted)}
+.tags{display:flex;flex-wrap:wrap;gap:5px;padding:8px 10px 0}
+.tags:last-of-type{padding-bottom:8px}
+.tag{padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600;background:var(--line);color:var(--muted)}
+.tag.on{background:#173d24;color:var(--ok)}
+.vu{padding:10px}
+.vu-scale{position:relative;height:14px;border-radius:3px;background:linear-gradient(90deg,#8a7a1e 0 25%,#9acd32 25% 50%,#2ea043 50% 75%,#d9452f 75% 100%)}
+.vu-scale i{position:absolute;top:-3px;bottom:-3px;left:0;width:3px;margin-left:-1px;background:#fff;box-shadow:0 0 0 1px #000}
+.vu-ticks{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin:3px 0 6px}
+pre.log{margin:0;padding:8px 10px;height:55vh;overflow:auto;background:#0a0d10;color:#9fe0a8;font:12px/1.35 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-all}
