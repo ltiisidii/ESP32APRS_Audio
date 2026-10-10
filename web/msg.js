@@ -60,8 +60,7 @@ pages.messages = async (main) => {
 
   let listText = '';
   const refresh = async () => {
-    const r = await fetch('/api/messages');
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const r = await apiFetch('/api/messages');
     const txt = await r.text();
     if (txt !== listText) { listText = txt; list = JSON.parse(txt); draw(); }
   };

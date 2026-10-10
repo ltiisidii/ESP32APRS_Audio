@@ -5,10 +5,24 @@ const $ = (s) => document.querySelector(s);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => '&#' + c.charCodeAt(0) + ';');
 const ICONS = 'https://aprs.p00lack.cc/symbols/icons/';
 
-async function api(path, opts) {
+// fetch() for /api/*: a 401 means the browser no longer sends the login (it drops it after long idle
+// periods); show one notice with a reload button instead of failing silently
+async function apiFetch(path, opts) {
   const r = await fetch(path, opts);
+  if (r.status === 401) sessionExpired();
   if (!r.ok) throw new Error(path + ': HTTP ' + r.status);
-  return r.json();
+  return r;
+}
+const api = async (path, opts) => (await apiFetch(path, opts)).json();
+
+function sessionExpired() {
+  if (document.getElementById('relogin')) return;
+  const b = document.createElement('div');
+  b.id = 'relogin';
+  b.className = 'relogin';
+  b.innerHTML = 'Session expired: the browser stopped sending the login. <button class="btn primary sm">Reload</button>';
+  b.querySelector('button').onclick = () => location.reload();
+  document.body.appendChild(b);
 }
 
 function toast(msg) {
@@ -125,8 +139,7 @@ async function dashboard(main) {
 
   let lhText = '';
   const stopLH = poller(async () => {
-    const r = await fetch('/api/lastheard');
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const r = await apiFetch('/api/lastheard');
     const txt = await r.text();
     if (txt !== lhText) { lhText = txt; data = JSON.parse(txt); drawLH(); }
   }, 5000);
