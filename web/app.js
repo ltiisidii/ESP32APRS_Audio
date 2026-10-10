@@ -42,9 +42,15 @@ function liveSocket(path, onMsg, onState) {
   let ws, timer, closed = false;
   const open = () => {
     ws = new WebSocket('ws://' + location.hostname + ':81' + path);
-    ws.onopen = () => onState(true);
-    ws.onclose = () => { onState(false); if (!closed) timer = setTimeout(open, 3000); };
-    ws.onmessage = (e) => { try { onMsg(JSON.parse(e.data)); } catch (err) { /* ignore bad frame */ } };
+    // after the page is left (closed) late events must not touch its elements, which are gone
+    ws.onopen = () => { if (!closed) onState(true); };
+    ws.onclose = () => { if (closed) return; onState(false); timer = setTimeout(open, 3000); };
+    ws.onmessage = (e) => {
+      if (closed) return;
+      let m;
+      try { m = JSON.parse(e.data); } catch (err) { return; } // ignore a bad frame
+      onMsg(m);
+    };
   };
   open();
   return () => { closed = true; clearTimeout(timer); ws.close(); };
