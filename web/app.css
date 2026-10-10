@@ -58,3 +58,5 @@ table.list{width:100%;border-collapse:collapse;white-space:nowrap}
 .vu-scale i{position:absolute;top:-3px;bottom:-3px;left:0;width:3px;margin-left:-1px;background:#fff;box-shadow:0 0 0 1px #000}
 .vu-ticks{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin:3px 0 6px}
 pre.log{margin:0;padding:8px 10px;height:55vh;overflow:auto;background:#0a0d10;color:#9fe0a8;font:12px/1.35 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-all}
+nav a.old::after{content:"classic";margin-left:6px;padding:0 4px;border:1px solid var(--line);border-radius:3px;font-size:10px;color:var(--muted)}
+nav .sep:first-child{padding-top:4px}
