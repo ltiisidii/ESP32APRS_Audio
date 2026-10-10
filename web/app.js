@@ -8,7 +8,13 @@ const ICONS = 'https://aprs.p00lack.cc/symbols/icons/';
 // fetch() for /api/*: a 401 means the browser no longer sends the login (it drops it after long idle
 // periods); show one notice with a reload button instead of failing silently
 async function apiFetch(path, opts) {
-  const r = await fetch(path, opts);
+  let r;
+  for (let attempt = 1; ; attempt++) {
+    r = await fetch(path, opts);
+    // 503 = the station is short of memory for a moment (many requests at once): wait and retry
+    if (r.status !== 503 || attempt === 4) break;
+    await new Promise((ok) => setTimeout(ok, 400 * attempt));
+  }
   if (r.status === 401) sessionExpired();
   if (!r.ok) throw new Error(path + ': HTTP ' + r.status);
   return r;

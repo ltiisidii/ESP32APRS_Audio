@@ -58,10 +58,26 @@ extern bool initInterval;
 
 
 
+// A JSON answer holds its document and its output buffer until it is sent. Several large ones at once
+// (a browser opening many pages, a script) could use up the heap, and the TCP library then crashes on a
+// failed malloc. Below these limits /api/* answers "busy" (503) and the page retries a moment later.
+#define API_MIN_FREE_HEAP 70000  // bytes free; the station restarts itself below 50000
+#define API_MIN_FREE_BLOCK 24000 // largest free block
+
 static bool authOk(AsyncWebServerRequest *request)
 {
     if (request->authenticate(config.http_username, config.http_password))
+    {
+        if (request->url().startsWith("/api/") &&
+            (ESP.getFreeHeap() < API_MIN_FREE_HEAP || ESP.getMaxAllocHeap() < API_MIN_FREE_BLOCK))
+        {
+            AsyncWebServerResponse *res = request->beginResponse(503, "application/json", "{\"ok\":false,\"error\":\"busy\"}");
+            res->addHeader("Retry-After", "1");
+            request->send(res);
+            return false;
+        }
         return true;
+    }
     // The pages call /api/* in the background. Answering those with a login challenge makes the browser pop
     // its login box at a random moment (e.g. after a night, when it has dropped the saved login). Without the
     // challenge the page shows "session expired" instead; pages themselves (/) still ask for the login.
