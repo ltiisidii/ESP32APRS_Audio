@@ -86,6 +86,7 @@ pages.system = (main) => formPage(main, (cfg, meta) => {
         { k: 'dspBright', l: 'TFT brightness', t: 'sel', o: Array.from({ length: 11 }, (_, n) => [n * 25, String(n * 25)]) },
         { k: 'dspDelay', l: 'Popup time', t: 'sel', o: Array.from({ length: 16 }, (_, n) => [n, n + ' s']) },
         { k: 'dspTOut', l: 'Screen sleep', t: 'sel', o: Array.from({ length: 21 }, (_, n) => [n * 30, n ? n * 30 + ' s' : 'never']) },
+        { k: 'dspRotate', l: 'Carousel', t: 'sel', o: [[0, 'off (button only)'], [5, '5 s'], [8, '8 s'], [10, '10 s'], [15, '15 s'], [20, '20 s'], [30, '30 s'], [60, '60 s']], h: 'Time per screen. Screens that do not apply (GPS without a GPS, sensors without sensors) are skipped. The button moves on and pauses it for a minute.' },
         { k: 'dspRF', l: 'Popup from RF', t: 'sw' },
         { k: 'dspINET', l: 'Popup from Internet', t: 'sw' },
         { k: 'dspDxFilter', l: 'Max distance', t: 'num', min: 0, max: 9999, unit: 'km', h: '0 = any distance' },

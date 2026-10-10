@@ -314,6 +314,7 @@ void configToJson(const Configuration &config, JsonDocument &doc)
     doc["dspBright"] = config.disp_brightness;
     doc["dspStartUp"] = config.startup;
     doc["dspDelay"] = config.dispDelay;
+    doc["dspRotate"] = config.disp_rotate;
     doc["dspDxFilter"] = config.filterDistant;
     doc["dspHUp"] = config.h_up;
     doc["dspTX"] = config.tx_display;
@@ -855,6 +856,7 @@ void configFromJson(JsonDocument &doc, Configuration &config)
     config.disp_brightness = doc["dspBright"];
     config.startup = doc["dspStartUp"];
     config.dispDelay = doc["dspDelay"];
+    config.disp_rotate = doc["dspRotate"] | 8;
     config.filterDistant = doc["dspDxFilter"];
     config.h_up = doc["dspHUp"];
     config.tx_display = doc["dspTX"];

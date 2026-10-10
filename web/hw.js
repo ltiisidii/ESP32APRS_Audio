@@ -143,12 +143,15 @@ pages.sensors = async (main) => {
     const td = (f) => '<td>' + control(f) + '</td>';
     return {
       title: 'Sensors',
+      intro: 'External sensors wired to the station (temperature, humidity, pressure, voltage...). Each one reads a value from a ' +
+        'port (I2C, UART, ADC, counter, Modbus) and turns it into a number with the equation a&middot;v&sup2; + b&middot;v + c. ' +
+        'The Weather and Telemetry pages then pick these sensors by number (SENSOR#1...#10). If no sensor is wired, leave them all off.',
       sections: [
         {
           title: 'Readings',
           fields: [],
           html: '<div class="scroll"><table class="list"><thead><tr><th>#</th><th>Name</th><th>Sample</th><th>Average</th></tr></thead><tbody id="senLive">' +
-            S.map((s, x) => '<tr><td>' + (x + 1) + '</td><td>' + esc(cfg.Sensor[x * 11 + 9]) + '</td><td data-s="' + x + '">-</td><td data-a="' + x + '">-</td></tr>').join('') +
+            S.map((s, x) => '<tr><td>' + (x + 1) + '</td><td>' + esc(cfg.Sensor[x * 11 + 9]) + '</td><td data-live-s="' + x + '">-</td><td data-live-a="' + x + '">-</td></tr>').join('') +
             '</tbody></table></div><div class="hint pad">Refreshed every 5 s</div>',
         },
         {
@@ -176,7 +179,7 @@ pages.sensors = async (main) => {
       const v = await api('/api/sensors');
       v.forEach((r, x) => {
         const on = CFG.Sensor[x * 11];
-        const s = main.querySelector('[data-s="' + x + '"]'), a = main.querySelector('[data-a="' + x + '"]');
+        const s = main.querySelector('[data-live-s="' + x + '"]'), a = main.querySelector('[data-live-a="' + x + '"]');
         if (s) s.textContent = on ? r.sample + ' ' + CFG.Sensor[x * 11 + 10] : 'off';
         if (a) a.textContent = on ? r.average + ' ' + CFG.Sensor[x * 11 + 10] : '';
       });
@@ -280,6 +283,10 @@ pages.modules = (main) => formPage(main, (cfg, meta) => {
       ],
     });
   }
+  // Most used first: the radio wiring, then GPS and serial ports, buses, inputs, external devices
+  const ORDER = ['Radio wiring', 'GNSS', 'UART0', 'UART1', 'I2C 0 (display)', 'I2C 1', '1-Wire bus', 'Counter 0', 'Counter 1',
+    'Modbus', 'External TNC', 'Cellular modem (PPPoS)', 'AT command channels'];
+  sections.sort((x, y) => ORDER.indexOf(x.title) - ORDER.indexOf(y.title));
   return {
     title: 'Modules',
     intro: 'How the hardware is wired. Wrong GPIO numbers can stop a function from working; changes take effect after a reboot.',

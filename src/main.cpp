@@ -3179,6 +3179,37 @@ int SA868_getRSSI()
     return 0;
 }
 
+// Result of the last SA868 setup: "" = the module accepted every setting, else what failed (for the web)
+String rfInitError;
+
+// One SA868 setup command, checked: the module answers "+<CMD>:0" when it accepted it. Up to 3 tries:
+// at boot the first answer sometimes came back garbled ("+DOOERPOR"), and then the frequency could be
+// left unprogrammed without anyone noticing.
+static bool sa868Cmd(const char *cmd, const char *what)
+{
+    String data;
+    for (int t = 0; t < 3; t++)
+    {
+        while (SerialRF.available() > 0)
+            SerialRF.read();
+        SerialRF.print(cmd);
+        if (SA868_waitResponse(data, "\r\n", 1500))
+        {
+            int c = data.indexOf(':');
+            if (data.startsWith("+") && c > 0 && data.charAt(c + 1) == '0')
+                return true;
+        }
+        delay(300);
+    }
+    if (rfInitError.length() == 0)
+    {
+        data.trim();
+        rfInitError = String(what) + " not accepted (" + data.substring(0, 24) + ")";
+    }
+    log_e("SA868 %s failed: %s", what, data.c_str());
+    return false;
+}
+
 String SA868_getVERSION()
 {
     String data;
@@ -3389,25 +3420,24 @@ static void RF_MODULE_locked(bool boot)
     }
     else if ((config.rf_type == RF_SA868_VHF) || (config.rf_type == RF_SA868_UHF) || (config.rf_type == RF_SA868_350))
     {
-        SerialRF.printf("AT+DMOCONNECT\r\n");
-        if (SA868_waitResponse(data, rsp, 1000))
-            log_d("%s", data.c_str());
-        RF_VERSION = SA868_getVERSION();
-        log_d("RF Module Version %s", RF_VERSION);
+        // Every step is checked and retried (see sa868Cmd); the outcome is shown on the dashboard
+        rfInitError = "";
+        sa868Cmd("AT+DMOCONNECT\r\n", "connect");
+        for (int t = 0; t < 3; t++)
+        {
+            RF_VERSION = SA868_getVERSION();
+            if (RF_VERSION.indexOf("VERSION") >= 0)
+                break;
+            delay(300);
+        }
+        log_d("RF Module Version %s", RF_VERSION.c_str());
         sprintf(str, "AT+DMOSETGROUP=%01d,%0.4f,%0.4f,%04d,%01d,%04d\r\n", config.band, config.freq_tx, config.freq_rx, config.tone_tx, config.sql_level, config.tone_rx);
-        SerialRF.print(str);
         log_d("Write to SA868: %s", str);
-        if (SA868_waitResponse(data, rsp, 2000))
-            log_d("%s", data.c_str());
-        SerialRF.printf("AT+SETTAIL=0\r\n");
-        if (SA868_waitResponse(data, rsp, 1000))
-            log_d("%s", data.c_str());
-        SerialRF.printf("AT+SETFILTER=1,1,1\r\n");
-        if (SA868_waitResponse(data, rsp, 1000))
-            log_d("%s", data.c_str());
-        SerialRF.printf("AT+DMOSETVOLUME=%d\r\n", config.volume);
-        if (SA868_waitResponse(data, rsp, 1000))
-            log_d("%s", data.c_str());
+        sa868Cmd(str, "frequency");
+        sa868Cmd("AT+SETTAIL=0\r\n", "tail");
+        sa868Cmd("AT+SETFILTER=1,1,1\r\n", "filter");
+        sprintf(str, "AT+DMOSETVOLUME=%d\r\n", config.volume);
+        sa868Cmd(str, "volume");
     }
     else if ((config.rf_type == RF_SR_2WVS) || (config.rf_type == RF_SR_2WUS))
     {
@@ -3602,6 +3632,51 @@ bool showDisp = false;
 #ifdef OLED
 RTC_DATA_ATTR bool gps_mode;
 RTC_DATA_ATTR uint8_t curTab;
+
+// ---- OLED carousel ----
+// Screens (curTab): 0 GPS, 1 statistics, 2 last packet, 3 packet count, 4 system, 5 radio, 6 WiFi, 7 sensors.
+// Shown in this order, skipping the ones that make no sense on this station.
+static const uint8_t OLED_ORDER[] = {2, 1, 5, 6, 4, 3, 7, 0};
+static uint64_t oledNextRotate = 0;
+
+bool oledTabUseful(uint8_t tab)
+{
+    switch (tab)
+    {
+    case 0:
+        return config.gnss_enable;
+    case 5:
+        return config.rf_en;
+    case 7:
+        for (int i = 0; i < SENSOR_NUMBER; i++)
+            if (config.sensor[i].enable)
+                return true;
+        return false;
+    default:
+        return tab < 8;
+    }
+}
+
+// Redraw period of a screen: 10 s, or sooner when the carousel moves on sooner
+uint32_t oledRefreshMs()
+{
+    return (config.disp_rotate > 0 && config.disp_rotate < 10) ? config.disp_rotate * 1000UL : 10000UL;
+}
+
+uint8_t oledNextTab(uint8_t tab)
+{
+    int at = 0;
+    for (int i = 0; i < (int)sizeof(OLED_ORDER); i++)
+        if (OLED_ORDER[i] == tab)
+            at = i;
+    for (int k = 1; k <= (int)sizeof(OLED_ORDER); k++)
+    {
+        uint8_t t = OLED_ORDER[(at + k) % sizeof(OLED_ORDER)];
+        if (oledTabUseful(t))
+            return t;
+    }
+    return 2; // last packet is always useful
+}
 uint64_t timeHalfSec = 0;
 #endif
 
@@ -3989,8 +4064,8 @@ void setup()
     }
 
     showDisp = true;
-    if (curTab > 7)
-        curTab = 6;
+    if (curTab > 7 || !oledTabUseful(curTab))
+        curTab = OLED_ORDER[0]; // was stuck on screens that do not apply (GPS INFO full of zeros without a GPS)
     oledSleepTimeout = millis64() + (config.oled_timeout * 1000);
 #endif
     // enableLoopWDT();
@@ -5511,9 +5586,8 @@ void loop()
                 timeSec = timeHalfSec = millis64();
                 // if (oledSleepTimeout > 0)
                 //{
-                curTab++;
-                if (curTab > 7)
-                    curTab = 0;
+                curTab = oledNextTab(curTab);
+                oledNextRotate = millis64() + 60000; // the carousel waits while someone is reading
                 //}
                 log_d("curTab=%d", curTab);
             }
@@ -5559,6 +5633,11 @@ void loop()
                 {
                     timeSec = millis64() + 10000;
                     showDisp = true;
+                    if (config.disp_rotate > 0 && millis64() >= oledNextRotate)
+                    {
+                        curTab = oledNextTab(curTab);
+                        oledNextRotate = millis64() + (uint64_t)config.disp_rotate * 1000;
+                    }
                     // timeHalfSec = 0;
                     // oledSleepTimeout = millis64() + (config.oled_timeout * 1000);
                 }
@@ -5587,31 +5666,31 @@ void loop()
             {
             case 1:
                 statisticsDisp();
-                timeSec = millis64() + 10000;
+                timeSec = millis64() + oledRefreshMs();
                 break;
             case 2:
                 pkgLastDisp();
-                timeSec = millis64() + 10000;
+                timeSec = millis64() + oledRefreshMs();
                 break;
             case 3:
                 pkgCountDisp();
-                timeSec = millis64() + 10000;
+                timeSec = millis64() + oledRefreshMs();
                 break;
             case 4:
                 systemDisp();
-                timeSec = millis64() + 10000;
+                timeSec = millis64() + oledRefreshMs();
                 break;
             case 5:
                 radioDisp();
-                timeSec = millis64() + 10000;
+                timeSec = millis64() + oledRefreshMs();
                 break;
             case 6:
                 wifiDisp();
-                timeSec = millis64() + 10000;
+                timeSec = millis64() + oledRefreshMs();
                 break;
             case 7:
                 sensorDisp();
-                timeSec = millis64() + 10000;
+                timeSec = millis64() + oledRefreshMs();
                 break;
             case 0:
                 gpsDisp();
