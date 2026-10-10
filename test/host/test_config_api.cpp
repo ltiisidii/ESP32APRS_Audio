@@ -19,6 +19,7 @@ static Configuration sample()
     c.timeZone = -3;
     c.igate_en = false;
     c.igate_timestamp = true;
+    strlcpy(c.tlm0_comment, "tlm note", sizeof(c.tlm0_comment));
     return c;
 }
 
@@ -34,6 +35,7 @@ TEST(config_json_roundtrip)
     CHECK_EQ_INT(b.aprs_port, 14580);
     CHECK(b.timeZone == -3);
     CHECK(b.igate_timestamp); // iGate time stamp switch survives a save/load
+    CHECK_EQ_STR(b.tlm0_comment, "tlm note"); // system telemetry comment too
 }
 
 TEST(config_api_masks_every_secret)

@@ -279,6 +279,7 @@ void configToJson(const Configuration &config, JsonDocument &doc)
     doc["tlmPath"] = config.tlm0_path;
     doc["tlmInfoInv"] = config.tlm0_info_interval;
     doc["tlmDataInv"] = config.tlm0_data_interval;
+    doc["tlmComment"] = config.tlm0_comment; // was never saved before: lost on reboot
     doc["tlmBIT"] = config.tlm0_BITS_Active;
     // doc["tlmDataCH"]=config.tml0_data_channel;
     JsonArray tlmEQNS = doc["tlmEQNS"].to<JsonArray>();
@@ -823,6 +824,7 @@ void configFromJson(JsonDocument &doc, Configuration &config)
     config.tlm0_path = doc["tlmPath"];
     config.tlm0_info_interval = doc["tlmInfoInv"];
     config.tlm0_data_interval = doc["tlmDataInv"];
+    strlcpy(config.tlm0_comment, doc["tlmComment"] | "", sizeof(config.tlm0_comment));
     config.tlm0_BITS_Active = doc["tlmBIT"];
 
     for (int i = 0; i < 5; i++)
