@@ -2,7 +2,7 @@
  Web UI (static app in web/, embedded gzip by tools/embed_web.py) and its JSON API.
 
  GET  /, /app.css, /app.js  embedded files (gzip, ETag, 304 when unchanged)
- GET  /api/info             live status
+ GET  /api/info             live status (dashboard)
  GET  /api/config           whole configuration, secrets replaced by CFG_SECRET_MASK
  POST /api/config           JSON object with the keys to change; saves and asks for a restart
  POST /api/reboot           restart in ~1 s
@@ -15,8 +15,19 @@
 #include "webapi.h"
 #include "web_assets.h"
 #include "millis64.h"
+#include "wireguard_vpn.h"
+#include <ESPCPUTemp.h>
+#ifdef PPPOS
+#include <PPP.h>
+#endif
+#ifdef MQTT
+#include <PubSubClient.h>
+extern PubSubClient clientMQTT;
+#endif
 
 #define API_MAX_BODY 16384
+
+extern bool VBat_Flag;
 
 
 
@@ -60,18 +71,35 @@ static void apiInfo(AsyncWebServerRequest *request)
 {
     if (!authOk(request))
         return;
+    StandByTick = millis() + (config.pwr_stanby_delay * 1000); // someone is watching: keep the power save standby away (as the old dashboard did)
     JsonDocument doc;
     doc["version"] = String(VERSION) + VERSION_BUILD;
+    doc["host"] = config.host_name;
     doc["chip"] = ESP.getChipModel();
+    doc["cpuMhz"] = ESP.getCpuFreqMHz();
+    ESPCPUTemp tempSensor;
+    if (tempSensor.begin())
+        doc["temp"] = serialized(String(tempSensor.getTemp(), 1));
+    if (VBat_Flag)
+        doc["vbat"] = serialized(String(VBat, 2));
     doc["uptime"] = (uint32_t)(millis64() / 1000);
+    doc["time"] = (uint32_t)time(NULL);
+    doc["tz"] = config.timeZone;
     doc["heap"] = ESP.getFreeHeap();
     doc["heapMin"] = ESP.getMinFreeHeap();
     doc["heapSize"] = ESP.getHeapSize();
+#ifdef BOARD_HAS_PSRAM
+    doc["psram"] = ESP.getFreePsram();
+    doc["psramSize"] = ESP.getPsramSize();
+#endif
     doc["callsign"] = config.aprs_mycall;
     doc["ssid"] = config.aprs_ssid;
     doc["fsUsed"] = LITTLEFS.usedBytes();
     doc["fsTotal"] = LITTLEFS.totalBytes();
+
     JsonObject w = doc["wifi"].to<JsonObject>();
+    static const char *const WIFI_MODE_NAME[] = {"OFF", "AP", "STA", "AP+STA"};
+    w["mode"] = config.wifi_mode < 4 ? WIFI_MODE_NAME[config.wifi_mode] : "?";
     bool sta = WiFi.status() == WL_CONNECTED;
     w["sta"] = sta;
     if (sta)
@@ -82,9 +110,56 @@ static void apiInfo(AsyncWebServerRequest *request)
     }
     w["apIp"] = WiFi.softAPIP().toString();
     w["apClients"] = WiFi.softAPgetStationNum();
-    doc["igate"] = aprsClient.connected();
+
+    JsonObject n = doc["net"].to<JsonObject>();
+    n["aprsis"] = (bool)aprsClient.connected();
+    n["aprsHost"] = config.aprs_host;
+    n["aprsPort"] = config.aprs_port;
+    n["vpn"] = wireguard_active();
+#ifdef PPPOS
+    n["ppp"] = PPP.connected();
+#endif
+#ifdef MQTT
+    n["mqtt"] = clientMQTT.connected();
+#endif
+
+    JsonObject m = doc["modes"].to<JsonObject>();
+    m["igate"] = config.igate_en;
+    m["digi"] = config.digi_en;
+    m["tracker"] = config.trk_en;
+    m["wx"] = config.wx_en;
+
+    JsonObject r = doc["radio"].to<JsonObject>();
+    r["rf"] = config.rf_en;
+    if (config.rf_en)
+    {
+        r["txFreq"] = serialized(String(config.freq_tx, 4));
+        r["rxFreq"] = serialized(String(config.freq_rx, 4));
+        r["power"] = config.rf_power ? "HIGH" : "LOW";
+    }
+    r["modem"] = config.modem_type < 4 ? MODEM_TYPE[config.modem_type] : "?";
+    r["fx25"] = config.fx25_mode < 3 ? FX25_MODE[config.fx25_mode] : "?";
+
+#ifdef BLUETOOTH
+    JsonObject b = doc["bt"].to<JsonObject>();
+    b["master"] = config.bt_master;
+    b["name"] = config.bt_name;
+    b["mode"] = config.bt_mode == 1 ? "TNC2" : config.bt_mode == 2 ? "KISS" : "NONE";
+#endif
+
+    JsonObject g = doc["gps"].to<JsonObject>();
+    g["en"] = config.gnss_enable;
+    if (config.gnss_enable && gps.location.isValid())
+    {
+        g["lat"] = serialized(String(gps.location.lat(), 5));
+        g["lng"] = serialized(String(gps.location.lng(), 5));
+        g["alt"] = serialized(String(gps.altitude.meters(), 1));
+        g["sat"] = gps.satellites.value();
+    }
+
     JsonObject s = doc["stats"].to<JsonObject>();
     s["rx"] = status.rxCount;
+    s["pkt"] = status.allCount;
     s["tx"] = status.txCount;
     s["digi"] = status.digiCount;
     s["rf2inet"] = status.rf2inet;
