@@ -13,6 +13,7 @@ enum SupervisedTask
     SV_TASK_APRS = 0,  // taskAPRS: TX queue, beacons, igate/digi processing
     SV_TASK_APRS_POLL, // taskAPRSPoll: AFSK demodulator
     SV_TASK_NETWORK,   // taskNetwork: WiFi, APRS-IS, NTP
+    SV_TASK_LOOP,      // Arduino loop(): OLED, BOOT button, heap check
     SV_TASK_COUNT
 };
 
@@ -28,6 +29,9 @@ static inline bool svStalled(uint32_t now, uint32_t last, uint32_t limitMs)
     int32_t age = (int32_t)(now - last);
     return age > (int32_t)limitMs;
 }
+
+// Where loop() is right now (shown on the web and in the restart reason when it hangs)
+extern const char *volatile loopStage;
 
 // Start the supervisor task (call once from setup() after the tasks are created)
 void supervisorStart(void);

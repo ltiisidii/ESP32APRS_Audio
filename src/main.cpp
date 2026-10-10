@@ -3368,12 +3368,12 @@ static void RF_MODULE_locked(bool boot)
     //! DC3 Radio & Pixels VDD , Don't change
     // PMU.setDC3Voltage(3400);
     // PMU.disableDC3();
-    pinMode(config.rf_pwr_gpio, OUTPUT);
+    pinModeSafe(config.rf_pwr_gpio, OUTPUT);
     digitalWrite(config.rf_pwr_gpio, !config.rf_pwr_active); // RF POWER LOW
 
     // pinMode(config.rf_ptt_gpio, OUTPUT);
     // digitalWrite(config.rf_ptt_gpio, !config.rf_ptt_active); // PTT HIGH
-    pinMode(config.rf_pd_gpio, OUTPUT);
+    pinModeSafe(config.rf_pd_gpio, OUTPUT);
     digitalWrite(config.rf_pd_gpio, !config.rf_pd_active); // PD LOW
     delay(500);
     if (boot)
@@ -5427,9 +5427,11 @@ bool save_act = false;
 bool manualWiFi = false;
 
 #ifndef GUI_LCD
+extern const char *volatile loopStage;
 void msgBox(String msg)
 {
 #ifdef OLED
+    loopStage = "msgBox";
     int x = msg.length() * 6;
     int x1 = (SCREEN_WIDTH / 2) - (x / 2);
     int y1 = (SCREEN_HEIGHT / 2);
@@ -5445,9 +5447,33 @@ void msgBox(String msg)
 }
 #endif
 
+// Where loop() is: read by the supervisor and /api/info to find a hang
+const char *volatile loopStage = "start";
+
+// The BOOT button only counts once it has been seen released. On the ESP32DR SA868 the BOOT pin (GPIO0,
+// shared with the DevKit auto-reset circuit) was read as pressed all the time: every long-press action
+// fired by itself (MANUAL TX, WiFi OFF, POWER OFF) and the loop froze waiting for a release.
+volatile bool bootArmed = false;
+bool bootPressed() { return digitalRead(BOOT_PIN) == LOW; } // for the web status
+
+// Wait until the BOOT button is released, at most 10 s: a stuck button or pin must not freeze the loop
+static void waitBootRelease()
+{
+    loopStage = "boot wait";
+    for (int i = 0; i < 100 && digitalRead(BOOT_PIN) == LOW; i++)
+        delay(100);
+    if (digitalRead(BOOT_PIN) == LOW)
+    {
+        bootArmed = false; // stuck low: ignore the button until it reads released again
+        log_e("BOOT button stuck pressed, ignored");
+    }
+}
+
 uint8_t heapCount = 0;
 void loop()
 {
+    supervisorFeed(SV_TASK_LOOP);
+    loopStage = "top";
     if (millis64() > timeTask)
     {
         timeTask = millis64() + 10000;
@@ -5496,8 +5522,11 @@ void loop()
     //         btn_count = 0;
     //     }
     // }
+    loopStage = "button";
+    if (!bootArmed && digitalRead(BOOT_PIN) == HIGH)
+        bootArmed = true;
     #ifdef OLED
-    if (digitalRead(BOOT_PIN) == LOW)
+    if (bootArmed && digitalRead(BOOT_PIN) == LOW)
     {
         btn_count++;
         if (btn_count > 200) // Push BOOT >2sec
@@ -5512,18 +5541,12 @@ void loop()
                 else
                     gps_mode = true;
                 msgBox("GPS SWAP");
-                while (digitalRead(BOOT_PIN) == LOW)
-                {
-                    delay(100);
-                }
+                waitBootRelease();
             }
             else if (curTab == 4) // System display
             {
                 msgBox("POWER OFF");
-                while (digitalRead(BOOT_PIN) == LOW)
-                {
-                    delay(100);
-                }
+                waitBootRelease();
                 // PowerOff();
                 esp_deep_sleep_start();
             }
@@ -5544,18 +5567,12 @@ void loop()
                     msgBox("WiFi ON");
                     vTaskResume(taskNetworkHandle);
                 }
-                while (digitalRead(BOOT_PIN) == LOW)
-                {
-                    delay(100);
-                }
+                waitBootRelease();
             }
             else if (curTab == 1) // Status display
             {
                 msgBox("MANUAL TX");
-                while (digitalRead(BOOT_PIN) == LOW)
-                {
-                    delay(100);
-                }
+                waitBootRelease();
                 EVENT_TX_POSITION = 6;
                 tx_interval = config.trk_interval;
             }
@@ -5596,6 +5613,7 @@ void loop()
     }
 
     // Popup Display
+    loopStage = "display";
     if (config.oled_enable == true)
     {
         if (dispBuffer.getCount() > 0)
@@ -5659,6 +5677,7 @@ void loop()
 
         if (showDisp)
         {
+            loopStage = "draw";
             showDisp = false;
             timeHalfSec = millis64();
             // oledSleepTimeout = millis64() + (config.oled_timeout * 1000);
@@ -5701,6 +5720,7 @@ void loop()
 #endif
 
     // Tick one secound
+    loopStage = "tick";
     if (millis64() > timeCheck)
     {
         // esp_task_wdt_reset();

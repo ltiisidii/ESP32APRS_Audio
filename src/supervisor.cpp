@@ -27,8 +27,8 @@ extern TaskHandle_t taskSerialHandle, taskGPSHandle, taskSensorHandle;
 
 // Max time without a feed before restarting. Covers the longest legitimate blocking call
 // of each task (taskNetwork: WiFi reconnect, ping, APRS-IS/MQTT connect, PPP).
-static const uint32_t svLimitMs[SV_TASK_COUNT] = {60000, 30000, 300000};
-static const char *const svName[SV_TASK_COUNT] = {"taskAPRS", "taskAPRSPoll", "taskNetwork"};
+static const uint32_t svLimitMs[SV_TASK_COUNT] = {60000, 30000, 300000, 60000};
+static const char *const svName[SV_TASK_COUNT] = {"taskAPRS", "taskAPRSPoll", "taskNetwork", "loop"};
 
 static volatile uint32_t svLastFeed[SV_TASK_COUNT];
 static TaskHandle_t svHandle[SV_TASK_COUNT];
@@ -138,7 +138,10 @@ static void taskSupervisor(void *pvParameters)
             if (svStalled(now, last, svLimitMs[i]))
             {
                 char reason[48];
-                snprintf(reason, sizeof(reason), "%s stalled %us", svName[i], (unsigned)((now - last) / 1000));
+                if (i == SV_TASK_LOOP)
+                    snprintf(reason, sizeof(reason), "loop stalled %us at %s", (unsigned)((now - last) / 1000), loopStage);
+                else
+                    snprintf(reason, sizeof(reason), "%s stalled %us", svName[i], (unsigned)((now - last) / 1000));
                 supervisorRestart(reason);
             }
         }

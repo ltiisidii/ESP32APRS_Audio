@@ -259,7 +259,7 @@ function terminal(main) {
       const shown = Math.max(-40, Math.min(0, db));
       $('#vuMark').style.left = ((shown + 40) * 2.5) + '%';
       $('#vuText').textContent = (mV / 1000).toFixed(3) + ' Vrms, ' + (isFinite(db) ? db.toFixed(1) : '-') + ' dBV';
-      log.add(new Date(m.t * 1000).toLocaleString() + ' [' + (mV / 1000).toFixed(3) + ' Vrms, ' + (isFinite(db) ? db.toFixed(1) : '-') + ' dBV]\n' + m.raw);
+      log.add((m.t > 1600000000 ? new Date(m.t * 1000).toLocaleString() : 'clock not set yet') + ' [' + (mV / 1000).toFixed(3) + ' Vrms, ' + (isFinite(db) ? db.toFixed(1) : '-') + ' dBV]\n' + m.raw);
     });
   }, 1000, (ok) => { $('#wsState').textContent = ok ? '(live)' : '(no answer, retrying...)'; });
 }
