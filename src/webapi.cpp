@@ -11,6 +11,8 @@
  POST /api/reboot           restart in ~1 s
  GET  /api/about            board, chip, WiFi and PPPoS details
  GET  /api/sensors          live sensor readings (sample, average)
+ GET  /api/messages         APRS message list (also pushed on the /eventMsg stream)
+ POST /api/messages/send    {"to", "text"}: send an APRS message
  POST /api/time             {"epoch": UTC seconds}: set the clock by hand
  POST /api/factory          defaults saved, then restart
  POST /api/reload           read /default.cfg again (drop unsaved runtime changes)
@@ -224,7 +226,7 @@ struct ApplyPlan
     bool aprsIs;   // APRS-IS login data: drop the connection so it logs in again (old iGate page)
     bool clock;    // time zone or NTP server: re-run configTime (old System page)
     bool sensors;  // sensor setup: sensorInit(true) (old Sensor page)
-    bool restart;  // WiFi mode/AP/networks and Bluetooth are only read at boot
+    bool restart;  // WiFi mode/AP/networks, Bluetooth and the VPN are only read at boot
 };
 
 static ApplyPlan planChanges(const Configuration &o, const Configuration &n)
@@ -244,7 +246,11 @@ static ApplyPlan planChanges(const Configuration &o, const Configuration &n)
     p.restart = o.wifi_mode != n.wifi_mode || o.wifi_ap_ch != n.wifi_ap_ch ||
                 strcmp(o.wifi_ap_ssid, n.wifi_ap_ssid) || strcmp(o.wifi_ap_pass, n.wifi_ap_pass) ||
                 memcmp(o.wifi_sta, n.wifi_sta, sizeof(o.wifi_sta)) ||
-                memcmp(&o.bt_slave, &n.bt_slave, (const char *)&o.bt_power - (const char *)&o.bt_slave + sizeof(o.bt_power));
+                memcmp(&o.bt_slave, &n.bt_slave, (const char *)&o.bt_power - (const char *)&o.bt_slave + sizeof(o.bt_power)) ||
+                o.vpn != n.vpn || o.wg_port != n.wg_port || strcmp(o.wg_peer_address, n.wg_peer_address) ||
+                strcmp(o.wg_local_address, n.wg_local_address) || strcmp(o.wg_netmask_address, n.wg_netmask_address) ||
+                strcmp(o.wg_gw_address, n.wg_gw_address) || strcmp(o.wg_public_key, n.wg_public_key) ||
+                strcmp(o.wg_private_key, n.wg_private_key);
     return p;
 }
 
@@ -477,6 +483,52 @@ static void apiSensors(AsyncWebServerRequest *request)
         o["average"] = serialized(String(sen[i].average, 2));
     }
     sendJson(request, doc);
+}
+
+// ---- APRS messages (old MSG tab). The list is the same JSON the /eventMsg stream pushes. ----
+static void apiMessages(AsyncWebServerRequest *request)
+{
+    if (!authOk(request))
+        return;
+    AsyncResponseStream *res = request->beginResponseStream("application/json");
+    res->addHeader("Cache-Control", "no-store");
+    res->print(event_chatMessage(true));
+    request->send(res);
+}
+
+// {"to": "CALL-SSID", "text": "..."}; checked against the APRS message format before it goes on air
+static void apiMessageSend(AsyncWebServerRequest *request)
+{
+    if (!authOk(request))
+        return;
+    const char *body = (const char *)request->_tempObject;
+    JsonDocument d;
+    if (!body || deserializeJson(d, body))
+    {
+        request->send(400, "application/json", "{\"ok\":false,\"error\":\"bad json\"}");
+        return;
+    }
+    String to = d["to"] | "";
+    String text = d["text"] | "";
+    to.trim();
+    to.toUpperCase();
+    bool toOk = to.length() >= 3 && to.length() <= 9;
+    for (size_t i = 0; toOk && i < to.length(); i++)
+        toOk = isalnum((unsigned char)to[i]) || to[i] == '-';
+    bool textOk = text.length() >= 1 && text.length() <= 67; // APRS message text limit
+    for (size_t i = 0; textOk && i < text.length(); i++)
+    {
+        unsigned char c = text[i];
+        textOk = c >= 0x20 && c < 0x7f && c != '|' && c != '~' && c != '{'; // reserved in APRS messages
+    }
+    if (!toOk || !textOk)
+    {
+        request->send(400, "application/json", toOk ? "{\"ok\":false,\"error\":\"text: 1-67 printable characters, no | ~ {\"}"
+                                                      : "{\"ok\":false,\"error\":\"bad callsign\"}");
+        return;
+    }
+    sendAPRSMessage(to, text, config.msg_encrypt);
+    request->send(200, "application/json", "{\"ok\":true}");
 }
 
 // Board name shown on About (same list as the old page)
@@ -740,6 +792,8 @@ void webApiRegister(AsyncWebServer &server)
     server.on("/api/files/format", HTTP_POST, apiFormat);
     server.on("/api/files/upload", HTTP_POST, apiUploadDone, apiUploadData);
     server.on("/api/files", HTTP_GET, apiFiles);
+    server.on("/api/messages/send", HTTP_POST, apiMessageSend, NULL, apiBody);
+    server.on("/api/messages", HTTP_GET, apiMessages);
     server.on("/api/about", HTTP_GET, apiAbout);
     server.on("/api/sensors", HTTP_GET, apiSensors);
     server.on("/api/time", HTTP_POST, apiTime, NULL, apiBody);
