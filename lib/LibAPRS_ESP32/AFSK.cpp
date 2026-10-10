@@ -1,6 +1,7 @@
 
 #include <Arduino.h>
 #include "AFSK.h"
+#include "soc/gpio_reg.h"
 #include "esp_log.h"
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
@@ -306,7 +307,9 @@ void LED_Status2(uint8_t r, uint8_t g, uint8_t b)
   }
   else
   {
-    if (millis64() > rgbTimeout)
+    // Changes are rate limited for the NeoPixel, but "off" always goes through: it is sent once
+    // (DCD end, squelch close) and dropping it left the RX LED lit until the next packet
+    if (millis64() > rgbTimeout || (r == 0 && g == 0 && b == 0))
     {
       rgbTimeout = millis64() + 100;
       r_old = r;
@@ -862,6 +865,26 @@ bool getReceive()
   return ret;
 }
 
+// pinMode() for an output, without the side effect seen on the classic ESP32 with this core: making
+// GPIO32..39 an output also enabled the output of GPIO(n-32). The PTT on GPIO32 (ESP32DR SA868) turned
+// GPIO0, the BOOT button, into an output driven low: the firmware saw the button held forever and fired
+// its long-press actions by itself (MANUAL TX, WiFi OFF, POWER OFF), freezing the main loop.
+void pinModeSafe(int8_t pin, uint8_t mode)
+{
+#if CONFIG_IDF_TARGET_ESP32
+  uint32_t before = REG_READ(GPIO_ENABLE_REG);
+  pinMode(pin, mode);
+  if (pin >= 32)
+  {
+    uint32_t leaked = REG_READ(GPIO_ENABLE_REG) & ~before;
+    if (leaked)
+      REG_WRITE(GPIO_ENABLE_W1TC_REG, leaked);
+  }
+#else
+  pinMode(pin, mode);
+#endif
+}
+
 /**
  * @brief Controls PTT output
  * @param state False - PTT off, true - PTT on
@@ -884,12 +907,12 @@ void setPtt(bool state)
     #endif
     if (_ptt_active)
     {
-      pinMode(_ptt_pin, OUTPUT);
+      pinModeSafe(_ptt_pin, OUTPUT);
       digitalWrite(_ptt_pin, HIGH);
     }
     else
     { // Open Collector to LOW
-      pinMode(_ptt_pin, OUTPUT_OPEN_DRAIN);
+      pinModeSafe(_ptt_pin, OUTPUT_OPEN_DRAIN);
       digitalWrite(_ptt_pin, LOW);
     }
     LED_Status2(255, 0, 0);
@@ -900,12 +923,12 @@ void setPtt(bool state)
     // adcq.flush();
     if (_ptt_active)
     {
-      pinMode(_ptt_pin, OUTPUT);
+      pinModeSafe(_ptt_pin, OUTPUT);
       digitalWrite(_ptt_pin, LOW);
     }
     else
     { // Open Collector to HIGH
-      pinMode(_ptt_pin, OUTPUT_OPEN_DRAIN);
+      pinModeSafe(_ptt_pin, OUTPUT_OPEN_DRAIN);
       digitalWrite(_ptt_pin, HIGH);
     }
     LED_Status2(0, 0, 0);
@@ -1297,7 +1320,7 @@ void AFSK_hw_init(void)
   if (_sql_pin > -1)
     pinMode(_sql_pin, INPUT_PULLUP);
   if (_pwr_pin > -1)
-    pinMode(_pwr_pin, OUTPUT);
+    pinModeSafe(_pwr_pin, OUTPUT);
   if (_led_tx_pin > -1)
   {
     pinMode(_led_tx_pin, OUTPUT);

@@ -498,8 +498,8 @@ typedef struct Config_Struct
 // when a key is missing from the saved configuration.
 #define DEFAULT_APRS_HOST "rotate.aprs2.net" // APRS-IS tier-2 round robin
 #define DEFAULT_NTP_HOST "pool.ntp.org"
-#define DEFAULT_LAT -34.6037 // Buenos Aires
-#define DEFAULT_LON -58.3816
+#define DEFAULT_LAT -40.763 // Villa La Angostura, Neuquen
+#define DEFAULT_LON -71.635
 #define DEFAULT_AP_SSID "ESP32APRS_Audio"
 #define DEFAULT_AP_PASS "esp32aprs"
 #define DEFAULT_STATUS "https://github.com/ltiisidii/ESP32APRS_Audio"

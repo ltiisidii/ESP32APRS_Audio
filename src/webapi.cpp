@@ -58,6 +58,8 @@ extern int mVrms;                     // AFSK.cpp: RMS level of the last audio b
 extern volatile uint32_t adcIsrCount; // AFSK.cpp: ADC samples taken
 extern String rfRssiRaw;
 extern String rfInitError;
+extern volatile bool bootArmed; // main.cpp: BOOT button seen released since boot
+bool bootPressed();
 extern const char *volatile rfRssiState;
 
 
@@ -137,6 +139,9 @@ static void apiInfo(AsyncWebServerRequest *request)
         doc["vbat"] = serialized(String(VBat, 2));
     doc["uptime"] = (uint32_t)(millis64() / 1000);
     doc["lastRestart"] = supervisorLastRestart(); // "" unless the supervisor forced the last restart
+    doc["loopStage"] = (const char *)loopStage;    // where the Arduino loop() is (OLED, BOOT button)
+    doc["bootPin"] = bootPressed() ? "pressed" : "released"; // BOOT button / GPIO0 as the firmware reads it
+    doc["bootArmed"] = bootArmed;
     doc["time"] = (uint32_t)time(NULL);
     doc["tz"] = config.timeZone;
     doc["heap"] = ESP.getFreeHeap();

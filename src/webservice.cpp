@@ -211,6 +211,9 @@ String lastHeardJson()
 					//if (tmNow.tm_mday == tmstruct.tm_mday)
 					//	sprintf(strTime, "%02d:%02d:%02d", tmstruct.tm_hour, tmstruct.tm_min, tmstruct.tm_sec);
 					//else
+					if (pkg.time < 1600000000) // heard before the clock was set (NTP/GPS): no date to show, not 1969
+						strcpy(strTime, "no clock");
+					else
 						sprintf(strTime, "%02d %02d:%02d:%02d", tmstruct.tm_mday, tmstruct.tm_hour, tmstruct.tm_min, tmstruct.tm_sec);
 					// String str = String(tmstruct.tm_hour, DEC) + ":" + String(tmstruct.tm_min, DEC) + ":" + String(tmstruct.tm_sec, DEC);
 
@@ -239,7 +242,7 @@ String lastHeardJson()
 							snprintf(temp_html, sizeof(temp_html), "\"icon\":\"%s\",", fileImg);
 							strcat(html, temp_html);
 						}
-						else
+					else
 						{
 							snprintf(fileImg, sizeof(fileImg), "%d", sym);
 							if (aprs.symbol[0] == 92)
@@ -295,7 +298,7 @@ String lastHeardJson()
 							strncpy(LPath, last_comma + 1, sizeof(LPath) - 1);
 							LPath[sizeof(LPath) - 1] = '\0';
 						}
-						else
+					else
 						{
 							strncpy(LPath, path, sizeof(LPath) - 1);
 							LPath[sizeof(LPath) - 1] = '\0';
@@ -308,7 +311,7 @@ String lastHeardJson()
 							snprintf(temp_html, sizeof(temp_html), "\"path\":\"INET:%s\",", path_esc);
 							strcat(html, temp_html);
 						}
-						else
+					else
 						{
 							jsonEscapeCopy(path_esc, sizeof(path_esc), path);
 							if (strchr(path, '*') != NULL)
@@ -332,7 +335,7 @@ String lastHeardJson()
 							lat = gps.location.lat();
 							lon = gps.location.lng();
 						}
-						else
+					else
 						{
 							lat = config.igate_lat;
 							lon = config.igate_lon;
