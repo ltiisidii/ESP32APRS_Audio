@@ -4,7 +4,7 @@ The web interface is being moved from HTML built in C++ (`src/webservice.cpp`, j
 app in `web/` plus a JSON API (`src/webapi.cpp`). The goal is a technology change only: every item the
 old interface shows or lets you change must exist in the new one before the old code is deleted.
 
-The old interface stays reachable at `/classic` until the last stage. Each row below is checked on
+The old interface stayed reachable at `/classic` until the last stage. Each row below was checked on
 the device before the migration of that page is merged.
 
 ## Stage 2: real-time pages
@@ -245,7 +245,40 @@ Wiring changes are saved at once and take effect after a reboot; the page offers
 
 `/wx`, `/tlm`, `/sensor`, `/mod` (about 3,470 lines). `webservice.cpp` is down to about 2,160 lines from 12,400.
 
-## Stage 4c
+## Stage 4c: Messages, VPN, MQTT and the end of the old interface
 
-Messages, MQTT, VPN, then removal of `/classic`, jQuery and the old style sheet. A table like the ones
-above is added for each page when it is migrated.
+### Messages (old `/msg`)
+
+| Old item | New location |
+| --- | --- |
+| Chat table: time, callsign, message, ACK state, message ID | Messages: one conversation per station, bubbles with time, ID and state (acknowledged, try n of N, not acknowledged, received) |
+| Live updates on `/eventMsg` (an HTML table) | Same stream, now JSON (`[{t, call, id, text, ack, rx}]`); also `GET /api/messages` |
+| Send: TO and MSG fields | Composer with a 67 character counter; `POST /api/messages/send` checks the callsign and refuses the characters APRS reserves (`\|`, `~`, `{`) |
+| Settings: enable, my callsign, RF / Internet, encryption, AES key, retries, retry interval, path | Messages > Message settings (`msg*`); the AES key is masked |
+
+The old chat inserted received text as HTML, so a message from the air could run script in the browser.
+The new page always shows it as text.
+
+### VPN (old `/vpn`)
+
+| Old item | New location / key |
+| --- | --- |
+| Enable, server address and port, local address, netmask, gateway, server public key, client private key | VPN (`vpn*`); the private key is masked (the old page sent it in the page source); a reboot is offered after saving |
+
+### MQTT
+
+No build defines `MQTT`, and the MQTT flag constants are missing from the sources, so the old MQTT page
+was never compiled into any firmware. It is not migrated; its settings stay in the configuration file.
+
+### Removed with this stage
+
+`/vpn`, `/msg`, the MQTT page code, the old shell `/classic`, `/style.css`, `/jquery-3.7.1.js`
+(`include/jquery_min_js.h`, 189 KB of source), `/logout` and `/default`. `GET /default` had no login
+and reset the running configuration to defaults; the factory reset is now only on System, with login and
+confirmation. `webservice.cpp` keeps the live data streams (last heard, messages, TNC2 and GNSS
+WebSockets) and the firmware update endpoints: about 740 lines, from 12,400.
+
+## Result
+
+Every page of the old interface has a place in the new one (tables above). All old pages and jQuery
+are gone; the web app is about 29 KB gzipped and is served from flash.
