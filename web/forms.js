@@ -233,7 +233,7 @@ async function formPage(main, specFn) {
       const r = await api('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
       setGuard(null);
       await formPage(main, specFn);
-      if (r.restart) restartBanner(main);
+      if (r.restart || (spec.rebootToApply && r.changed)) restartBanner(main, spec.rebootToApply);
       else toast(r.changed ? 'Saved and applied' : 'Nothing changed');
     } catch (err) {
       toast('Save failed: ' + err.message);
@@ -242,10 +242,10 @@ async function formPage(main, specFn) {
   };
 }
 
-function restartBanner(main) {
+function restartBanner(main, msg) {
   const b = document.createElement('div');
   b.className = 'banner';
-  b.innerHTML = 'Saved. WiFi and Bluetooth changes take effect after a reboot. <button class="btn primary sm">Reboot now</button>';
+  b.innerHTML = esc(msg || 'Saved. WiFi and Bluetooth changes take effect after a reboot.') + ' <button class="btn primary sm">Reboot now</button>';
   b.querySelector('button').onclick = async () => {
     try { await api('/api/reboot', { method: 'POST' }); b.textContent = 'Rebooting... the page reconnects by itself.'; setConn(false); } catch (e) { toast(e.message); }
   };

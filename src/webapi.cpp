@@ -10,6 +10,7 @@
                             restart is needed (WiFi mode/networks, Bluetooth)
  POST /api/reboot           restart in ~1 s
  GET  /api/about            board, chip, WiFi and PPPoS details
+ GET  /api/sensors          live sensor readings (sample, average)
  POST /api/time             {"epoch": UTC seconds}: set the clock by hand
  POST /api/factory          defaults saved, then restart
  POST /api/reload           read /default.cfg again (drop unsaved runtime changes)
@@ -23,6 +24,7 @@
 #include "webapi.h"
 #include "web_assets.h"
 #include "millis64.h"
+#include "sensor.h"
 #include "wireguard_vpn.h"
 #include "esp_wifi.h"
 #include <AFSK.h>
@@ -221,6 +223,7 @@ struct ApplyPlan
     bool txPower;  // WiFi TX power: set at once (old WiFi page)
     bool aprsIs;   // APRS-IS login data: drop the connection so it logs in again (old iGate page)
     bool clock;    // time zone or NTP server: re-run configTime (old System page)
+    bool sensors;  // sensor setup: sensorInit(true) (old Sensor page)
     bool restart;  // WiFi mode/AP/networks and Bluetooth are only read at boot
 };
 
@@ -235,6 +238,7 @@ static ApplyPlan planChanges(const Configuration &o, const Configuration &n)
               o.preamble != n.preamble || o.fx25_mode != n.fx25_mode;
     p.txPower = o.wifi_power != n.wifi_power;
     p.clock = o.timeZone != n.timeZone || strcmp(o.ntp_host, n.ntp_host);
+    p.sensors = memcmp(o.sensor, n.sensor, sizeof(o.sensor)) != 0;
     p.aprsIs = o.igate_en != n.igate_en || o.aprs_ssid != n.aprs_ssid || o.aprs_port != n.aprs_port ||
                strcmp(o.aprs_mycall, n.aprs_mycall) || strcmp(o.aprs_host, n.aprs_host) || strcmp(o.aprs_filter, n.aprs_filter);
     p.restart = o.wifi_mode != n.wifi_mode || o.wifi_ap_ch != n.wifi_ap_ch ||
@@ -253,6 +257,8 @@ static void applyTask(void *arg)
         RF_MODULE(false);
     if (p->modem)
         afskSetModem(config.modem_type, config.audio_lpf, config.tx_timeslot, config.preamble * 100, config.fx25_mode);
+    if (p->sensors)
+        sensorInit(true);
     delete p;
     vTaskDelete(NULL);
 }
@@ -299,6 +305,10 @@ static void apiConfigPost(AsyncWebServerRequest *request)
     for (char *call : {config.aprs_mycall, config.digi_mycall, config.trk_mycall})
         for (char *c = call; *c; c++)
             *c = toupper((unsigned char)*c); // callsigns are upper case (as the old pages stored them)
+    if (config.ppp_enable && config.ppp_serial == 0) // the cellular modem owns its UART (old Modules page rule)
+        config.uart0_enable = false;
+    else if (config.ppp_enable && config.ppp_serial == 1)
+        config.uart1_enable = false;
     ApplyPlan plan = planChanges(*before, config);
     bool changed = memcmp(before, &config, sizeof(Configuration)) != 0;
     free(before);
@@ -316,7 +326,7 @@ static void apiConfigPost(AsyncWebServerRequest *request)
         if (beforeBrightness != config.disp_brightness)
             ledcWrite(0, (uint32_t)config.disp_brightness);
 #endif
-        if (plan.rfModule || plan.modem)
+        if (plan.rfModule || plan.modem || plan.sensors)
         {
             ApplyPlan *p = new ApplyPlan(plan);
             if (xTaskCreate(applyTask, "cfgApply", 4096, p, 1, NULL) != pdPASS)
@@ -382,6 +392,38 @@ static void apiMeta(AsyncWebServerRequest *request)
     for (const auto &t : PWR_MODE)
         a.add(t);
     doc["otaServer"] = OTA_SERVER_URL;
+    a = doc["wxSensors"].to<JsonArray>();
+    for (const auto &t : WX_SENSOR)
+        a.add(t);
+    a = doc["sensorTypes"].to<JsonArray>();
+    for (const auto &t : SENSOR_NAME)
+        a.add(t);
+    a = doc["sensorPorts"].to<JsonArray>();
+    for (const auto &t : SENSOR_PORT)
+        a.add(t);
+    a = doc["tlmSystem"].to<JsonArray>();
+    for (const auto &t : SYSTEM_NAME)
+        a.add(t);
+    a = doc["tlmBits"].to<JsonArray>();
+    for (const auto &t : SYSTEM_BITS_NAME)
+        a.add(t);
+    a = doc["baudrates"].to<JsonArray>();
+    for (unsigned long b : baudrate)
+        a.add(b);
+    a = doc["gnssPorts"].to<JsonArray>();
+    for (const auto &t : GNSS_PORT)
+        a.add(t);
+    a = doc["tncPorts"].to<JsonArray>();
+    for (const auto &t : TNC_PORT)
+        a.add(t);
+    a = doc["tncModes"].to<JsonArray>();
+    for (const auto &t : TNC_MODE)
+        a.add(t);
+    a = doc["adcAtten"].to<JsonArray>();
+    for (const auto &t : ADC_ATTEN)
+        a.add(t);
+    doc["gpioMax"] = (int)GPIO_NUM_MAX - 1;
+    doc["sensorCount"] = SENSOR_NUMBER;
     JsonObject f = doc["features"].to<JsonObject>();
 #ifdef BLUETOOTH
     f["bt"] = true;
@@ -419,6 +461,22 @@ static void apiReboot(AsyncWebServerRequest *request)
         return;
     request->send(200, "application/json", "{\"ok\":true}");
     xTaskCreate(rebootTask, "reboot", 2048, NULL, 1, NULL);
+}
+
+// Live sensor readings for the Sensors page (the old page showed them once, at load)
+static void apiSensors(AsyncWebServerRequest *request)
+{
+    if (!authOk(request))
+        return;
+    JsonDocument doc;
+    JsonArray a = doc.to<JsonArray>();
+    for (int i = 0; i < SENSOR_NUMBER; i++)
+    {
+        JsonObject o = a.add<JsonObject>();
+        o["sample"] = serialized(String(sen[i].sample, 2));
+        o["average"] = serialized(String(sen[i].average, 2));
+    }
+    sendJson(request, doc);
 }
 
 // Board name shown on About (same list as the old page)
@@ -683,6 +741,7 @@ void webApiRegister(AsyncWebServer &server)
     server.on("/api/files/upload", HTTP_POST, apiUploadDone, apiUploadData);
     server.on("/api/files", HTTP_GET, apiFiles);
     server.on("/api/about", HTTP_GET, apiAbout);
+    server.on("/api/sensors", HTTP_GET, apiSensors);
     server.on("/api/time", HTTP_POST, apiTime, NULL, apiBody);
     server.on("/api/factory", HTTP_POST, apiFactory);
     server.on("/api/reload", HTTP_POST, apiReload);

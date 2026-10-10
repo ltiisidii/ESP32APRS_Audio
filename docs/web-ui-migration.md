@@ -196,7 +196,56 @@ endpoints need the web login and accept plain file names only (no paths, no `..`
 `/system`, `/about`, `/storage`, `/download`, `/delete`, `/format`, `/upload` (about 2,160 lines).
 `/update`, `/ota_url` and `/check_version` stay: the new About page uses them.
 
-## Stage 4b and 4c
+## Stage 4b: Weather, Telemetry, Sensors, Modules
 
-Weather, Telemetry, Sensors, Modules (4b); Messages, MQTT, VPN, then removal of `/classic`, jQuery and the
-old style sheet (4c). A table like the ones above is added for each page when it is migrated.
+### Weather (old `/wx`)
+
+| Old item | New location / key |
+| --- | --- |
+| Enable, callsign, SSID, object name, path, comment, time stamp | Weather > Station (`wx*`); the comment is limited to its real size (24), the old form allowed 50 and overflowed |
+| Interval, fixed/GPS location, send to RF / Internet, lat, lon, alt | Weather > Position |
+| 26 weather values: use, sensor channel, sample or average | Weather > Sensors (`wxSenEn`, `wxSenCH`, `wxSenAvg`) |
+
+### Telemetry (old `/tlm`, system telemetry)
+
+| Old item | New location / key |
+| --- | --- |
+| Enable, callsign, SSID, path, comment, info and data intervals, send to RF / Internet | Telemetry > Station (`tlm*`); the comment is now saved (`tlmComment`, it was lost on reboot) |
+| Channels A1-A5: source, parameter, unit, EQNS a/b/c | Telemetry > Analog channels (`tlmDataCH`, `tlmPARM`, `tlmUNIT`, `tlmEQNS`) |
+| Channels B1-B8: source, parameter, unit, active LOW/HIGH | Telemetry > Digital channels (`tlmBIT`) |
+
+### Sensors (old `/sensor`)
+
+| Old item | New location |
+| --- | --- |
+| Sensor monitor (value and unit of each sensor, read once at page load) | Sensors > Readings, refreshed every 5 s (`GET /api/sensors`, also the average) |
+| 10 sensors: enable, type, name, unit, port, address/register/GPIO, sample and average time, EQNS | Sensors > Setup (`Sensor`, 11 values per sensor) |
+| Type fills name and unit; port fills the usual address | Same |
+| Saving re-initialises the sensors (`sensorInit`) | Same, after the HTTP answer |
+
+### Modules (old `/mod`)
+
+| Old item | New location / key |
+| --- | --- |
+| UART0, UART1: enable, RX, TX, RTS/DE, baudrate | Modules > UART0, UART1 (`uart0*`, `uart1*`) |
+| 1-Wire: enable, GPIO | Modules > 1-Wire bus |
+| RF GPIO: ADC attenuation and DC offset, module baudrate, RX, TX, PD, H/L, SQL, PTT with active levels | Modules > Radio wiring (`adc*`, `rf*`) |
+| I2C 0 and I2C 1: enable, SDA, SCK, frequency | Modules > I2C 0, I2C 1 |
+| Counter 0 and 1: enable, GPIO, active level | Modules > Counter 0, Counter 1. The old Counter 1 switch wrote Counter 0's enable, so Counter 1 could never be turned on |
+| GNSS: enable, port, AT command, TCP host and port | Modules > GNSS |
+| Modbus: enable, port, address, DE GPIO | Modules > Modbus |
+| External TNC: enable, port, mode | Modules > External TNC |
+| AT command channels: MQTT, message, Bluetooth, UART port | Modules > AT command channels |
+| PPPoS: enable, GNSS, NAPT, APN, PIN, port, baudrate, RX, TX, reset GPIO, level and delay | Modules > Cellular modem (builds with PPPoS); the PIN is masked; the modem's UART is still turned off for other uses |
+| Baudrate list | Same list; "2880" corrected to 28800 |
+
+Wiring changes are saved at once and take effect after a reboot; the page offers one.
+
+### Removed with this stage
+
+`/wx`, `/tlm`, `/sensor`, `/mod` (about 3,470 lines). `webservice.cpp` is down to about 2,160 lines from 12,400.
+
+## Stage 4c
+
+Messages, MQTT, VPN, then removal of `/classic`, jQuery and the old style sheet. A table like the ones
+above is added for each page when it is migrated.
