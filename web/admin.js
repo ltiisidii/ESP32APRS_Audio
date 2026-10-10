@@ -236,8 +236,7 @@ pages.files = async (main) => {
     const fd = new FormData();
     fd.append('file', f, f.name);
     try {
-      const r = await fetch('/api/files/upload', { method: 'POST', body: fd });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
+      await apiFetch('/api/files/upload', { method: 'POST', body: fd });
       toast('Uploaded');
       route();
     } catch (e) { toast('Upload failed: ' + e.message); }

@@ -62,7 +62,13 @@ static bool authOk(AsyncWebServerRequest *request)
 {
     if (request->authenticate(config.http_username, config.http_password))
         return true;
-    request->requestAuthentication();
+    // The pages call /api/* in the background. Answering those with a login challenge makes the browser pop
+    // its login box at a random moment (e.g. after a night, when it has dropped the saved login). Without the
+    // challenge the page shows "session expired" instead; pages themselves (/) still ask for the login.
+    if (request->url().startsWith("/api/"))
+        request->send(401, "application/json", "{\"ok\":false,\"error\":\"login required\"}");
+    else
+        request->requestAuthentication();
     return false;
 }
 
