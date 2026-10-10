@@ -54,7 +54,10 @@ extern PubSubClient clientMQTT;
 extern bool VBat_Flag;
 extern bool initInterval;
 extern volatile int rfRssi;
+extern int mVrms;                     // AFSK.cpp: RMS level of the last audio block, mV
+extern volatile uint32_t adcIsrCount; // AFSK.cpp: ADC samples taken
 extern String rfRssiRaw;
+extern String rfInitError;
 extern const char *volatile rfRssiState;
 
 
@@ -203,6 +206,7 @@ static void apiInfo(AsyncWebServerRequest *request)
         r["txFreq"] = serialized(String(config.freq_tx, 4));
         r["rxFreq"] = serialized(String(config.freq_rx, 4));
         r["power"] = config.rf_power ? "HIGH" : "LOW";
+        r["initError"] = rfInitError; // "" = the module accepted frequency, filters and volume
         if (rfRssi >= 0)
             r["rssi"] = rfRssi; // raw 0..255 from the SA868, read every 5 s
         r["rssiState"] = rfRssiState;
@@ -211,6 +215,10 @@ static void apiInfo(AsyncWebServerRequest *request)
         if (RF_VERSION.length())
             r["version"] = RF_VERSION; // answer of the module to AT+VERSION at boot: proves the UART link works
     }
+    // Receive audio as the decoder sees it: RMS level of the last block (it only decodes above 10 mV)
+    // and the ADC sample counter (must keep rising while receiving)
+    r["audioMv"] = mVrms;
+    r["adcCount"] = adcIsrCount;
     r["modem"] = config.modem_type < 4 ? MODEM_TYPE[config.modem_type] : "?";
     r["fx25"] = config.fx25_mode < 3 ? FX25_MODE[config.fx25_mode] : "?";
 

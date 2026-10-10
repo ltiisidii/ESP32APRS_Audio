@@ -281,6 +281,7 @@ typedef struct Config_Struct
 
 	// Display
 	unsigned int dispDelay;
+	uint8_t disp_rotate; // OLED carousel: seconds per screen, 0 = only the button changes it
 	unsigned int filterDistant;
 	bool h_up = true;
 	bool tx_display = true;

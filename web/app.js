@@ -54,6 +54,15 @@ const card = (title, body, cls) => '<div class="card' + (cls ? ' ' + cls : '') +
 const bar = (used, total) => '<div class="bar"><i style="width:' + Math.min(100, (100 * used) / (total || 1)).toFixed(0) + '%"></i></div>';
 const tag = (name, on) => '<span class="tag' + (on ? ' on' : '') + '">' + name + '</span>';
 const tzLabel = (tz) => 'UTC' + (tz >= 0 ? '+' : '') + tz;
+// SA868 RSSI is a raw 0..255 number: show it against the noise floor (lowest of the last readings seen here)
+const rssiSeen = [];
+const rssiText = (v) => {
+  if (!(v >= 0)) return '<span class="muted">not read</span>';
+  rssiSeen.push(v);
+  if (rssiSeen.length > 60) rssiSeen.shift();
+  const floor = Math.min(...rssiSeen), over = v - floor;
+  return v + ' <span class="muted">raw &middot; ' + (rssiSeen.length < 3 || over < 10 ? 'noise floor' : '<span class="ok">signal</span> +' + over + ' over noise (' + floor + ')') + '</span>';
+};
 const dBV = (mV) => (mV > 0 ? 20 * Math.log10(mV / 1000) : -Infinity);
 // Repeats fn every ms (after each run ends) until the returned stop function is called. Live data is
 // pulled this way: the firmware never pushes into the web server from its other tasks (see webfeed.h).
@@ -190,8 +199,9 @@ async function dashboard(main) {
         r.rf && ['Freq TX', Number(r.txFreq).toFixed(3) + ' MHz'],
         r.rf && ['Freq RX', Number(r.rxFreq).toFixed(3) + ' MHz'],
         r.rf && ['TX power', r.power],
-        r.rssi !== undefined && ['RSSI', r.rssi + ' <span class="muted">(raw, noise floor when idle)</span>'],
-        r.rf && ['Module', r.version ? '<span class="ok">' + esc(String(r.version).replace(/^\+?VERSION:/i, '')) + '</span>' : '<span class="warn">no answer</span>'],
+        r.rssi !== undefined && ['RSSI', rssiText(r.rssi)],
+        r.rf && ['Module', (r.version ? '<span class="ok">' + esc(String(r.version).replace(/^\+?VERSION:/i, '')) + '</span>' : '<span class="warn">no answer</span>') +
+          (r.initError ? ' <span class="bad">config FAILED: ' + esc(r.initError) + '</span>' : (r.version ? ' <span class="muted">&middot; config OK</span>' : ''))],
         ['Modem', esc(r.modem)],
         ['FX.25', esc(r.fx25)],
       ])) +
