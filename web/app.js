@@ -1,6 +1,6 @@
 'use strict';
 // ESP32APRS web UI: plain JS, no libraries. A page renders into #main and may return a cleanup
-// function (stop timers, close the EventSource / WebSocket) that runs when the user leaves it.
+// function (stop its timers) that runs when the user leaves it.
 const $ = (s) => document.querySelector(s);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => '&#' + c.charCodeAt(0) + ';');
 const ICONS = 'https://aprs.p00lack.cc/symbols/icons/';
@@ -35,25 +35,20 @@ const bar = (used, total) => '<div class="bar"><i style="width:' + Math.min(100,
 const tag = (name, on) => '<span class="tag' + (on ? ' on' : '') + '">' + name + '</span>';
 const tzLabel = (tz) => 'UTC' + (tz >= 0 ? '+' : '') + tz;
 const dBV = (mV) => (mV > 0 ? 20 * Math.log10(mV / 1000) : -Infinity);
-const b64 = (s) => { try { return atob(s || ''); } catch (e) { return ''; } };
-
-// Reconnecting WebSocket on the device's port 81 (/ws = TNC2 monitor, /ws_gnss = NMEA)
-function liveSocket(path, onMsg, onState) {
-  let ws, timer, closed = false;
-  const open = () => {
-    ws = new WebSocket('ws://' + location.hostname + ':81' + path);
-    // after the page is left (closed) late events must not touch its elements, which are gone
-    ws.onopen = () => { if (!closed) onState(true); };
-    ws.onclose = () => { if (closed) return; onState(false); timer = setTimeout(open, 3000); };
-    ws.onmessage = (e) => {
-      if (closed) return;
-      let m;
-      try { m = JSON.parse(e.data); } catch (err) { return; } // ignore a bad frame
-      onMsg(m);
-    };
+// Repeats fn every ms (after each run ends) until the returned stop function is called. Live data is
+// pulled this way: the firmware never pushes into the web server from its other tasks (see webfeed.h).
+function poller(fn, ms, onState) {
+  let t = 0, stopped = false;
+  const run = async () => {
+    if (stopped) return;
+    let ok = true;
+    try { await fn(); } catch (e) { ok = false; }
+    if (stopped) return; // the page is gone: do not touch its elements
+    if (onState) onState(ok);
+    t = setTimeout(run, ms);
   };
-  open();
-  return () => { closed = true; clearTimeout(timer); ws.close(); };
+  run();
+  return () => { stopped = true; clearTimeout(t); };
 }
 
 // Scrolling text log with a line limit, so a long session does not eat the browser's memory
@@ -128,8 +123,13 @@ async function dashboard(main) {
   };
   drawLH();
 
-  const es = new EventSource('/eventHeard');
-  es.addEventListener('lastHeard', (e) => { try { data = JSON.parse(e.data); drawLH(); } catch (err) { /* partial frame */ } });
+  let lhText = '';
+  const stopLH = poller(async () => {
+    const r = await fetch('/api/lastheard');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const txt = await r.text();
+    if (txt !== lhText) { lhText = txt; data = JSON.parse(txt); drawLH(); }
+  }, 5000);
 
   const draw = async () => {
     const i = await api('/api/info');
@@ -195,7 +195,7 @@ async function dashboard(main) {
   };
   await draw();
   const timer = setInterval(() => draw().then(() => setConn(true), () => setConn(false)), 10000);
-  return () => { clearInterval(timer); es.close(); };
+  return () => { clearInterval(timer); stopLH(); };
 }
 
 // ---- Terminal: TNC2 monitor of every packet decoded on RF, with the audio level (old /tnc2 page) ----
@@ -214,15 +214,18 @@ function terminal(main) {
     a.download = 'tnc2-' + new Date().toISOString().slice(0, 19).replace(/:/g, '') + '.txt';
     a.click();
   };
-  return liveSocket('/ws', (m) => {
-    if (m.Active !== '1') return;
-    const mV = parseFloat(m.mVrms) || 0, db = dBV(mV);
-    const shown = Math.max(-40, Math.min(0, db));
-    $('#vuMark').style.left = ((shown + 40) * 2.5) + '%';
-    $('#vuText').textContent = (mV / 1000).toFixed(3) + ' Vrms, ' + (isFinite(db) ? db.toFixed(1) : '-') + ' dBV';
-    const t = new Date(Number(m.timeStamp) * 1000);
-    log.add(t.toLocaleString() + ' [' + (mV / 1000).toFixed(3) + ' Vrms, ' + (isFinite(db) ? db.toFixed(1) : '-') + ' dBV]\n' + b64(m.RAW));
-  }, (ok) => { $('#wsState').textContent = ok ? '(live)' : '(reconnecting...)'; });
+  let seq = 0;
+  return poller(async () => {
+    const d = await api('/api/monitor?after=' + seq);
+    seq = d.seq;
+    d.items.forEach((m) => {
+      const mV = m.mv || 0, db = dBV(mV);
+      const shown = Math.max(-40, Math.min(0, db));
+      $('#vuMark').style.left = ((shown + 40) * 2.5) + '%';
+      $('#vuText').textContent = (mV / 1000).toFixed(3) + ' Vrms, ' + (isFinite(db) ? db.toFixed(1) : '-') + ' dBV';
+      log.add(new Date(m.t * 1000).toLocaleString() + ' [' + (mV / 1000).toFixed(3) + ' Vrms, ' + (isFinite(db) ? db.toFixed(1) : '-') + ' dBV]\n' + m.raw);
+    });
+  }, 1000, (ok) => { $('#wsState').textContent = ok ? '(live)' : '(no answer, retrying...)'; });
 }
 
 // ---- GPS: live fix and raw NMEA (old /gnss page) ----
@@ -233,10 +236,14 @@ function gpsPage(main) {
     '<div class="actions"><button class="btn" id="clear">Clear</button></div>';
   const log = makeLog($('#log'), 500);
   $('#clear').onclick = () => log.clear();
-  return liveSocket('/ws_gnss', (m) => {
+  let seq = 0;
+  return poller(async () => {
+    const m = await api('/api/gnss?after=' + seq);
+    seq = m.seq;
     const t = String(parseInt(m.time, 10) || 0).padStart(8, '0');
     $('#fix').innerHTML = rows([
-      ['Enabled', m.en === '1' ? '<span class="ok">yes</span>' : 'no'],
+      ['Enabled', m.en ? '<span class="ok">yes</span>' : 'no'],
+      ['Fix', m.valid ? '<span class="ok">valid</span>' : '<span class="warn">no fix</span>'],
       ['Latitude', esc(m.lat)],
       ['Longitude', esc(m.lng)],
       ['Altitude', esc(m.alt) + ' m'],
@@ -246,8 +253,8 @@ function gpsPage(main) {
       ['Satellites', esc(m.sat)],
       ['Time (UTC)', t.slice(0, 2) + ':' + t.slice(2, 4) + ':' + t.slice(4, 6)],
     ]);
-    log.add(b64(m.RAW).replace(/[\r\n]+$/, ''));
-  }, (ok) => { $('#wsState').textContent = ok ? '(live)' : '(reconnecting...)'; });
+    m.lines.forEach((l) => log.add(l));
+  }, 2000, (ok) => { $('#wsState').textContent = ok ? '(live)' : '(no answer, retrying...)'; });
 }
 
 // ---- Router ----

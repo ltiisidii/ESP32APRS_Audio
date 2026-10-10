@@ -14,6 +14,7 @@
 #include <LibAPRSesp.h>
 #include <limits.h>
 #include <KISS.h>
+#include "webfeed.h"
 #include "webservice.h"
 #include <WiFiUdp.h>
 #include "ESP32Ping.h"
@@ -6133,7 +6134,6 @@ void GPS_INIT()
 WiFiClient gnssClient;
 // WiFiClient tncClient;
 
-extern AsyncWebSocket ws_gnss;
 uint64_t gnssTimeInterval = 0;
 
 void taskGPS(void *pvParameters)
@@ -6209,14 +6209,7 @@ void taskGPS(void *pvParameters)
                                     // nmea[nmea_idx] = 0;
                                     if (nmea_idx > 10)
                                     {
-                                        // if (webServiceBegin == false)
-                                        if (ws_gnss.enabled() && !ws_gnss.getClients().isEmpty())
-                                        {
-                                            // if (ws_gnss.availableForWriteAll())
-                                            {
-                                                handle_ws_gnss(nmea, nmea_idx);
-                                            }
-                                        }
+                                        webFeedNmea(nmea, nmea_idx); // GPS page (read by the web server, see webfeed.h)
                                         // log_d("[%d]:%s",nmea_idx,nmea);
                                     }
                                     nmea_idx = 0;
@@ -6268,11 +6261,7 @@ void taskGPS(void *pvParameters)
                                         // nmea[nmea_idx] = 0;
                                         if (nmea_idx > 10)
                                         {
-                                            // if (webServiceBegin == false)
-                                            if (ws_gnss.enabled() && !ws_gnss.getClients().isEmpty())
-                                            {
-                                                handle_ws_gnss(nmea, nmea_idx);
-                                            }
+                                            webFeedNmea(nmea, nmea_idx); // GPS page (read by the web server, see webfeed.h)
                                             // log_d("%s",nmea);
                                         }
                                         nmea_idx = 0;
@@ -7342,7 +7331,7 @@ void taskAPRS(void *pvParameters)
                                 }
                             }
 #endif
-                            handle_ws(rawP, tnc2.length(), incomingPacket.mVrms);
+                            webFeedMonitor(rawP, tnc2.length(), incomingPacket.mVrms); // TNC2 monitor page
                             free(rawP);
                         }
                     }
@@ -8688,15 +8677,6 @@ void taskNetwork(void *pvParameters)
         if (WiFi.isConnected() == true || WiFi.softAPgetStationNum() > 0)
 #endif
         {
-            if (lastHeard_Flag)
-            {
-                if (millis64() > lastHeardTimeout)
-                {
-                    lastHeard_Flag = false;
-                    lastHeardTimeout = millis64() + 1000;
-                    event_lastHeard(false);
-                }
-            }
         }
 
         if (config.wifi_mode & WIFI_AP_FIX)

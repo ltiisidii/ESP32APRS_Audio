@@ -37,17 +37,11 @@ extern int offset;
 #endif // SH1106
 
 AsyncWebServer async_server(80);
-AsyncWebServer async_websocket(81);
-AsyncWebSocket ws("/ws");
-AsyncWebSocket ws_gnss("/ws_gnss");
 
 #ifdef PPPOS
 extern pppType pppStatus;
 #endif
 
-// Server-sent events: last heard list and message list (JSON)
-AsyncEventSource lastheard_events("/eventHeard");
-AsyncEventSource message_events("/eventMsg");
 
 extern uint64_t waitISRetry;
 extern volatile int8_t adcEn;
@@ -103,19 +97,17 @@ static void jsonEscapeCopy(char *dest, size_t destSize, const char *src)
 	dest[j] = '\0';
 }
 
-void event_lastHeard(bool gethtml)
+// Last heard list as JSON for GET /api/lastheard. Runs only in the web server task, so the big work
+// buffers are static (they would not fit its 8 KB stack).
+String lastHeardJson()
 {
-	// log_d("Event count: %d",lastheard_events.count());
-	// if (lastheard_events.count() == 0)
-	//	return;
-
-	struct pbuf_t aprs;
-	ParseAPRS aprsParse;
+	static struct pbuf_t aprs;
+	static ParseAPRS aprsParse;
 	struct tm tmstruct, tmNow;
 
 	// Using dynamic memory allocation instead of String
 	// Sized to fit a fully-escaped path/LPath (up to 256 raw chars -> 512 escaped) plus JSON key/quote overhead
-	char temp_html[600];
+	static char temp_html[600];
 	// 16 KB working buffer: PSRAM when the board has it, else the normal heap
 	char *html = nullptr;
 #ifdef BOARD_HAS_PSRAM
@@ -125,7 +117,7 @@ void event_lastHeard(bool gethtml)
 		html = (char *)calloc(16384, 1);
 	if (html==nullptr)
 	{
-		return; // Memory allocation failed
+		return String("[]"); // memory allocation failed
 	}
 	time_t timeNow = time(NULL);
 
@@ -133,7 +125,7 @@ void event_lastHeard(bool gethtml)
 	localtime_r(&timeNow, &tmNow);
 //strcat(webString, "  { time: \"21:54:23\", icon: \"91-1.png\", callsign: \"HS5TQA-7\", path: \"RF: WIDE1-1\", dx: 0.0, packet: 2, audio: -19.6 },\n");
 	strcpy(html, "[");
-	char pkgRaw[512];
+	static char pkgRaw[512];
 	for (int i = 0; i < PKGLISTSIZE; i++)
 	{
 		if (i >= PKGLISTSIZE)
@@ -185,7 +177,7 @@ void event_lastHeard(bool gethtml)
 				int start_dst = pos_gt2 ? (pos_gt2 - pkg.raw) : -1;
 				int start_dstssid = pos_dash ? (pos_dash - pkg.raw) : -1;
 
-				char path[256] = "";
+				static char path[256]; path[0] = 0;
 
 				if ((end_ssid > start_dst) && (end_ssid < start_info) && (end_ssid < (int)strlen(pkg.raw)))
 				{
@@ -297,7 +289,7 @@ void event_lastHeard(bool gethtml)
 					{
 						// Find last occurrence of ','
 						char *last_comma = strrchr(path, ',');
-						char LPath[256] = "";
+						static char LPath[256]; LPath[0] = 0;
 						if (last_comma != NULL)
 						{
 							strncpy(LPath, last_comma + 1, sizeof(LPath) - 1);
@@ -308,7 +300,7 @@ void event_lastHeard(bool gethtml)
 							strncpy(LPath, path, sizeof(LPath) - 1);
 							LPath[sizeof(LPath) - 1] = '\0';
 						}
-						char path_esc[513];
+						static char path_esc[513];
 						// if(path.indexOf("qAR")>=0 || path.indexOf("qAS")>=0 || path.indexOf("qAC")>=0){ //Via from Internet Server
 						if (strstr(path, "qA") != NULL || strstr(path, "TCPIP") != NULL)
 						{
@@ -388,17 +380,9 @@ void event_lastHeard(bool gethtml)
 	if (html[0] == '[')
 	strcat(html, "]");
 
-	size_t len = strlen(html);
-	// char *info = (char *)calloc(len + 1, sizeof(char));
-	// if (info)
-	// {
-	// 	strcpy(info, html);
-	if (len > 10)
-		lastheard_events.send(html, "lastHeard", millis() / 1000, 1000);
-	// 	free(info);
-	// }
-
+	String out = html[0] == '[' ? String(html) : String("[]");
 	free(html);
+	return out;
 }
 
 // Message list as JSON for the web UI: [{t, call, id, text, ack, rx}], newest first.
@@ -425,92 +409,9 @@ String event_chatMessage(bool gethtml)
 	}
 	String out;
 	serializeJson(doc, out);
-	if (gethtml)
-		return out;
-	if (message_events.count() > 0)
-		message_events.send(out.c_str(), "chatMsg", time(NULL), 5000);
-	return String("");
+	return gethtml ? out : String(""); // the page polls GET /api/messages; nothing is pushed from other tasks
 }
 
-
-void handle_ws(char *Raw, size_t len, uint16_t mVrms)
-{
-	if (ws.count() < 1)
-		return;
-
-	char *jsonMsg;
-	time_t timeStamp;
-	time(&timeStamp);
-
-	if (len > 5)
-	{
-		int input_length = len;
-		jsonMsg = (char *)calloc((input_length * 2) + 200, sizeof(char));
-		if (jsonMsg)
-		{
-			char *input_buffer = (char *)calloc(input_length + 2, sizeof(char));
-			char *output_buffer = (char *)calloc(input_length * 2, sizeof(char));
-			if (output_buffer)
-			{
-				memset(input_buffer, 0, (input_length + 2));
-				memset(output_buffer, 0, (input_length * 2));
-				// lastPkgRaw.toCharArray(input_buffer, input_length, 0);
-				memcpy(input_buffer, Raw, len);
-				encode_base64((unsigned char *)input_buffer, input_length, (unsigned char *)output_buffer);
-				// Serial.println(output_buffer);
-				sprintf(jsonMsg, "{\"Active\":\"1\",\"mVrms\":\"%d\",\"RAW\":\"%s\",\"timeStamp\":\"%li\"}", mVrms, output_buffer, timeStamp);
-				// Serial.println(jsonMsg);
-				free(input_buffer);
-				free(output_buffer);
-			}
-			ws.textAll(jsonMsg);
-			free(jsonMsg);
-		}
-	}
-	else
-	{
-		jsonMsg = (char *)calloc(300, sizeof(char));
-		if (jsonMsg)
-		{
-			if (mVrms > 0)
-				sprintf(jsonMsg, "{\"Active\":\"1\",\"mVrms\":\"%d\",\"RAW\":\"REVDT0RFIEZBSUwh\",\"timeStamp\":\"%li\"}", mVrms, timeStamp);
-			else
-				sprintf(jsonMsg, "{\"Active\":\"0\",\"mVrms\":\"0\",\"RAW\":\"\",\"timeStamp\":\"%li\"}", timeStamp);
-			ws.textAll(jsonMsg);
-			free(jsonMsg);
-		}
-	}
-}
-
-void handle_ws_gnss(char *nmea, size_t size)
-{
-	if (ws_gnss.count() < 1)
-		return;
-
-	time_t timeStamp;
-	time(&timeStamp);
-	// unsigned int output_length = encode_base64_length(size);
-	// unsigned char nmea_enc[output_length];
-	// char jsonMsg[output_length + 100];
-	// encode_base64((unsigned char *)nmea, size, (unsigned char *)nmea_enc);
-	// sprintf(jsonMsg, "{\"en\":\"%d\",\"lat\":\"%.5f\",\"lng\":\"%.5f\",\"alt\":\"%.2f\",\"spd\":\"%.2f\",\"csd\":\"%.1f\",\"hdop\":\"%.2f\",\"sat\":\"%d\",\"time\":\"%d\",\"timeStamp\":\"%li\",\"RAW\":\"", (int)config.gnss_enable, gps.location.lat(), gps.location.lng(), gps.altitude.meters(), gps.speed.kmph(), gps.course.deg(), gps.hdop.hdop(), gps.satellites.value(), gps.time.value(), timeStamp);
-	// strncat(jsonMsg, (const char *)nmea_enc, output_length);
-	// strcat(jsonMsg, "\"}");
-	unsigned int output_length = encode_base64_length(size);
-	unsigned char *nmea_enc = (unsigned char *)calloc(output_length + 2, sizeof(unsigned char));
-	char *jsonMsg = (char *)calloc(output_length + 200, sizeof(char));
-	if (nmea_enc && jsonMsg)
-	{
-		encode_base64((unsigned char *)nmea, size, (unsigned char *)nmea_enc);
-		sprintf(jsonMsg, "{\"en\":\"%d\",\"lat\":\"%.5f\",\"lng\":\"%.5f\",\"alt\":\"%.2f\",\"spd\":\"%.2f\",\"csd\":\"%.1f\",\"hdop\":\"%.2f\",\"sat\":\"%d\",\"time\":\"%d\",\"timeStamp\":\"%li\",\"RAW\":\"", (int)config.gnss_enable, gps.location.lat(), gps.location.lng(), gps.altitude.meters(), gps.speed.kmph(), gps.course.deg(), gps.hdop.hdop(), gps.satellites.value(), gps.time.value(), timeStamp);
-		strncat(jsonMsg, (const char *)nmea_enc, output_length);
-		strcat(jsonMsg, "\"}");
-		ws_gnss.textAll(jsonMsg);
-		free(nmea_enc);
-		free(jsonMsg);
-	}
-	
-}
 
 static void ota_url_task(void *pvParameters)
 {
@@ -629,46 +530,6 @@ void handle_check_version(AsyncWebServerRequest *request)
 	request->send(200, "application/json", resp);
 }
 
-void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len)
-{
-
-	if (type == WS_EVT_CONNECT)
-	{
-
-		log_d("Websocket client connection received");
-	}
-	else if (type == WS_EVT_DISCONNECT)
-	{
-
-		log_d("Client disconnected");
-	}
-}
-
-// void handle_vpn_request(AsyncWebServerRequest *request) {
-//     HTTPClient http;
-
-//     String url = "http://vpn.nakhonthai.net:82/wg/create";
-
-//     String mac = WiFi.macAddress();
-//     mac.replace(":", "");
-
-//     String payload = "{\"name\":\"" + mac + "\"}";
-
-//     http.begin(url);
-//     http.addHeader("Content-Type", "application/json");
-
-//     int httpCode = http.POST(payload);
-
-//     if (httpCode > 0) {
-//         String res = http.getString();
-//         request->send(200, "application/json", res);
-//     } else {
-//         request->send(500, "text/plain", "Error contacting VPN server");
-//     }
-
-//     http.end();
-// }
-
 bool webServiceBegin = true;
 void webService()
 {
@@ -680,8 +541,6 @@ void webService()
 	{
 		return;
 	}
-	ws.onEvent(onWsEvent);
-
 	// web client handlers
 	webApiRegister(async_server); // the web UI (web/) and its JSON API
 	// async_server.on("/symbol2", HTTP_GET | HTTP_POST, [](AsyncWebServerRequest *request)
@@ -751,33 +610,6 @@ void webService()
 	async_server.on("/check_version", HTTP_GET, [](AsyncWebServerRequest *request)
 					{ handle_check_version(request); });		
 
-	lastheard_events.onConnect([](AsyncEventSourceClient *client)
-							   {
-    if(client->lastId()){
-      log_d("Client reconnected! Last message ID that it got is: %u\n", client->lastId());
-    }
-    // send event with message "hello!", id current millis
-    // and set reconnect delay to 1 second
-    // the table is sent from the main loop (event_lastHeard) as soon as possible
-    lastHeardTimeout = 0;
-    lastHeard_Flag = true;
-});
-	async_server.addHandler(&lastheard_events);
-
-	message_events.onConnect([](AsyncEventSourceClient *client)
-							 {
-    if(client->lastId()){
-      log_d("Client reconnected! Last message ID that it got is: %u\n", client->lastId());
-    }
-    // send event with message "hello!", id current millis
-    // and set reconnect delay to 1 second
-	String html = event_chatMessage(true);
-    client->send(html.c_str(), "chatMsg", time(NULL), 5000); });
-	async_server.addHandler(&message_events);
-
 	async_server.onNotFound(notFound);
 	async_server.begin();
-	async_websocket.addHandler(&ws);
-	async_websocket.addHandler(&ws_gnss);
-	async_websocket.begin();
 }

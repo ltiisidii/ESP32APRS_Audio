@@ -33,9 +33,9 @@ System, GPS, Bluetooth.
 | APRS-IS server host and port (when iGate enabled) | Dashboard > Network (always shown) | `net.aprsHost`, `net.aprsPort` |
 | WiFi mode, SSID, RSSI | Dashboard > Network (plus IP and AP clients) | `wifi` |
 | Bluetooth master, name, mode (builds with Bluetooth) | Dashboard > Bluetooth | `bt` |
-| Last heard table: time (with time zone), icon, callsign (object/item name), via last path, DX (km/bearing), packets, audio dBV | Dashboard > Last heard | SSE `/eventHeard` (same JSON as before) |
+| Last heard table: time (with time zone), icon, callsign (object/item name), via last path, DX (km/bearing), packets, audio dBV | Dashboard > Last heard | `GET /api/lastheard` every 5 s (same JSON the old `/eventHeard` stream carried) |
 | Last heard sorting by time, callsign, DX, packets, audio | Click a column header (path also sortable) | in the browser |
-| Last heard live updates | Same SSE stream; the full table is also sent when the page connects | `lastheard_events` |
+| Last heard live updates | Polled every 5 s; redrawn only when it changed | |
 | [RAW] link to the TNC2 monitor | Last heard title link | `#terminal` |
 | Opening the dashboard pushes back the power-save standby | Every `/api/info` call (every 10 s while the dashboard is open) | `StandByTick` |
 
@@ -45,7 +45,7 @@ System, GPS, Bluetooth.
 | --- | --- |
 | RX audio VU meter, -40 to 0 dBV with four colour bands | TNC2 terminal > RX audio level (plain CSS, no Highcharts) |
 | Terminal line per packet: date, Vrms, dBV, then the TNC2 text | TNC2 terminal > Monitor, same format |
-| Live feed from WebSocket `ws://<device>:81/ws` | Same socket, reconnects by itself |
+| Live feed from WebSocket `ws://<device>:81/ws` | `GET /api/monitor?after=N` every second (frames kept in a small ring buffer) |
 | Auto-scroll to the newest packet | Kept; stops while you scroll up to read |
 | (new) Clear and save the log as a text file | Buttons under the monitor |
 
@@ -58,7 +58,7 @@ internet connection. The new page needs nothing outside the device.
 | --- | --- |
 | Enable, latitude, longitude, altitude, speed, course, HDOP, satellites, time | GPS > GNSS information (time shown as hh:mm:ss UTC) |
 | Raw NMEA terminal | GPS > NMEA |
-| Live feed from WebSocket `ws://<device>:81/ws_gnss` | Same socket, reconnects by itself |
+| Live feed from WebSocket `ws://<device>:81/ws_gnss` | `GET /api/gnss?after=N` every 2 s |
 
 Like the TNC2 page, the old GPS page loaded scripts from the internet; the new one does not.
 
@@ -252,7 +252,7 @@ Wiring changes are saved at once and take effect after a reboot; the page offers
 | Old item | New location |
 | --- | --- |
 | Chat table: time, callsign, message, ACK state, message ID | Messages: one conversation per station, bubbles with time, ID and state (acknowledged, try n of N, not acknowledged, received) |
-| Live updates on `/eventMsg` (an HTML table) | Same stream, now JSON (`[{t, call, id, text, ack, rx}]`); also `GET /api/messages` |
+| Live updates on `/eventMsg` (an HTML table) | `GET /api/messages` every 3 s (`[{t, call, id, text, ack, rx}]`) |
 | Send: TO and MSG fields | Composer with a 67 character counter; `POST /api/messages/send` checks the callsign and refuses the characters APRS reserves (`\|`, `~`, `{`) |
 | Settings: enable, my callsign, RF / Internet, encryption, AES key, retries, retry interval, path | Messages > Message settings (`msg*`); the AES key is masked |
 
@@ -277,6 +277,17 @@ was never compiled into any firmware. It is not migrated; its settings stay in t
 and reset the running configuration to defaults; the factory reset is now only on System, with login and
 confirmation. `webservice.cpp` keeps the live data streams (last heard, messages, TNC2 and GNSS
 WebSockets) and the firmware update endpoints: about 740 lines, from 12,400.
+
+## Live data without pushes (after a watchdog restart)
+
+The first version kept the old push model: the main loop sent the last heard list over SSE, the APRS task
+sent TNC2 frames and the GPS task sent NMEA over WebSockets on port 81, and the message code pushed over
+SSE. The async web server is only safe when driven from its own task; with a dashboard left open the
+station restarted once on the task watchdog with `async_tcp` blocked. Now no other task touches the web
+server: the APRS and GPS tasks write into small ring buffers guarded by a mutex (`webfeed.cpp`, about
+9.5 KB, allocated only while a page polls and freed a minute after), and the pages poll
+`/api/lastheard`, `/api/monitor`, `/api/gnss` and `/api/messages`. The port 81 server, the WebSockets and
+both SSE streams are gone.
 
 ## Result
 

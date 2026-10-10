@@ -11,7 +11,10 @@
  POST /api/reboot           restart in ~1 s
  GET  /api/about            board, chip, WiFi and PPPoS details
  GET  /api/sensors          live sensor readings (sample, average)
- GET  /api/messages         APRS message list (also pushed on the /eventMsg stream)
+ GET  /api/messages         APRS message list
+ GET  /api/lastheard        last heard list
+ GET  /api/monitor?after=N  TNC2 frames received after sequence N (TNC2 page)
+ GET  /api/gnss?after=N     GPS fix and NMEA sentences after sequence N (GPS page)
  POST /api/messages/send    {"to", "text"}: send an APRS message
  POST /api/time             {"epoch": UTC seconds}: set the clock by hand
  POST /api/factory          defaults saved, then restart
@@ -26,6 +29,7 @@
 #include "webapi.h"
 #include "web_assets.h"
 #include "millis64.h"
+#include "webfeed.h"
 #include "sensor.h"
 #include "wireguard_vpn.h"
 #include "esp_wifi.h"
@@ -485,7 +489,54 @@ static void apiSensors(AsyncWebServerRequest *request)
     sendJson(request, doc);
 }
 
-// ---- APRS messages (old MSG tab). The list is the same JSON the /eventMsg stream pushes. ----
+// ---- Live data, pulled by the pages (see webfeed.h for why nothing is pushed) ----
+static uint32_t afterParam(AsyncWebServerRequest *request)
+{
+    return request->hasParam("after") ? (uint32_t)request->getParam("after")->value().toInt() : 0;
+}
+
+// Last heard list (same JSON the old /eventHeard stream carried)
+static void apiLastHeard(AsyncWebServerRequest *request)
+{
+    if (!authOk(request))
+        return;
+    AsyncResponseStream *res = request->beginResponseStream("application/json");
+    res->addHeader("Cache-Control", "no-store");
+    res->print(lastHeardJson());
+    request->send(res);
+}
+
+// TNC2 monitor: frames newer than ?after=N
+static void apiMonitor(AsyncWebServerRequest *request)
+{
+    if (!authOk(request))
+        return;
+    JsonDocument doc;
+    doc["seq"] = webFeedMonitorRead(afterParam(request), doc["items"].to<JsonArray>());
+    sendJson(request, doc);
+}
+
+// GPS page: current fix and NMEA sentences newer than ?after=N
+static void apiGnss(AsyncWebServerRequest *request)
+{
+    if (!authOk(request))
+        return;
+    JsonDocument doc;
+    doc["seq"] = webFeedNmeaRead(afterParam(request), doc["lines"].to<JsonArray>());
+    doc["en"] = config.gnss_enable;
+    doc["valid"] = gps.location.isValid();
+    doc["lat"] = serialized(String(gps.location.lat(), 5));
+    doc["lng"] = serialized(String(gps.location.lng(), 5));
+    doc["alt"] = serialized(String(gps.altitude.meters(), 2));
+    doc["spd"] = serialized(String(gps.speed.kmph(), 2));
+    doc["csd"] = serialized(String(gps.course.deg(), 1));
+    doc["hdop"] = serialized(String(gps.hdop.hdop(), 2));
+    doc["sat"] = gps.satellites.value();
+    doc["time"] = gps.time.value();
+    sendJson(request, doc);
+}
+
+// ---- APRS messages (old MSG tab). The page polls this list. ----
 static void apiMessages(AsyncWebServerRequest *request)
 {
     if (!authOk(request))
@@ -794,6 +845,9 @@ void webApiRegister(AsyncWebServer &server)
     server.on("/api/files", HTTP_GET, apiFiles);
     server.on("/api/messages/send", HTTP_POST, apiMessageSend, NULL, apiBody);
     server.on("/api/messages", HTTP_GET, apiMessages);
+    server.on("/api/lastheard", HTTP_GET, apiLastHeard);
+    server.on("/api/monitor", HTTP_GET, apiMonitor);
+    server.on("/api/gnss", HTTP_GET, apiGnss);
     server.on("/api/about", HTTP_GET, apiAbout);
     server.on("/api/sensors", HTTP_GET, apiSensors);
     server.on("/api/time", HTTP_POST, apiTime, NULL, apiBody);
