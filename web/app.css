@@ -14,7 +14,7 @@ nav a{display:block;padding:6px 14px;color:var(--text)}
 nav a:hover{background:var(--line)}
 nav a.act{color:#fff;background:var(--line);box-shadow:inset 3px 0 var(--accent)}
 nav .sep{padding:10px 14px 4px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
-main{margin-left:170px;padding:12px;max-width:1100px}
+main{margin-left:170px;padding:12px;max-width:1800px}
 h1{font-size:15px;margin:0 0 10px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:4px}
@@ -140,6 +140,15 @@ td.acts{text-align:right;white-space:nowrap}
 .compose{display:flex;gap:8px;align-items:center;padding:8px;border-top:1px solid var(--line)}
 .compose input{flex:1;min-width:0}
 #msgCfg{margin-top:14px}
+/* dashboard: last heard + side column */
+.dash{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:10px;margin-top:10px;align-items:start}
+.lhcard{display:flex;flex-direction:column;height:calc(100vh - 190px);min-height:320px}
+.lhscroll{flex:1;overflow:auto}
+.side{display:flex;flex-direction:column;gap:10px}
+.side #ov{display:flex;flex-direction:column;gap:10px}
+.side .actions{margin-top:0}
+#cfgForm,.phead,.tabs,.intro,.banner{max-width:1100px}
+@media (max-width:1200px){.dash{grid-template-columns:1fr}.lhcard{height:auto;max-height:70vh}.side #ov{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}}
 @media (max-width:1000px){.grid3{grid-template-columns:repeat(2,1fr)}.tiles{grid-template-columns:repeat(3,1fr)}}
 @media (max-width:700px){
   #menu{display:block}
