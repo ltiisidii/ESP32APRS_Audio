@@ -7,6 +7,7 @@
 */
 
 #include "config.h"
+#include <new>
 #include <LITTLEFS.h>
 #include <SPIFFS.h>
 #include "FS.h"
@@ -79,6 +80,7 @@ void configToJson(const Configuration &config, JsonDocument &doc)
     // IGate group
     doc["igateEn"] = config.igate_en;
     doc["igateBcn"] = config.igate_bcn;
+    doc["igateTime"] = config.igate_timestamp; // was never saved before: the switch was lost on reboot
     doc["rf2inet"] = config.rf2inet;
     doc["inet2rf"] = config.inet2rf;
     doc["igatePos2rf"] = config.igate_loc2rf;
@@ -649,6 +651,7 @@ void configFromJson(JsonDocument &doc, Configuration &config)
     // IGate group
     config.igate_en = doc["igateEn"];
     config.igate_bcn = doc["igateBcn"];
+    config.igate_timestamp = doc["igateTime"] | false;
     config.rf2inet = doc["rf2inet"];
     config.inet2rf = doc["inet2rf"];
     config.igate_loc2rf = doc["igatePos2rf"];
@@ -1135,9 +1138,13 @@ int configApplyPatch(Configuration &cfg, JsonDocument &patch)
         dst.set(kv.value());
         applied++;
     }
-    Configuration next = cfg;
-    configFromJson(cur, next);
-    cfg = next;
+    // ~4 KB: keep it off the stack, the web server task only has 8 KB
+    Configuration *next = new (std::nothrow) Configuration(cfg);
+    if (!next)
+        return -2;
+    configFromJson(cur, *next);
+    cfg = *next;
+    delete next;
     return applied;
 }
 

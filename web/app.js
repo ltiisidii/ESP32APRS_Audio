@@ -150,6 +150,7 @@ async function dashboard(main) {
         r.rf && ['Freq TX', r.txFreq + ' MHz'],
         r.rf && ['Freq RX', r.rxFreq + ' MHz'],
         r.rf && ['TX power', r.power],
+        r.rf && ['Module', r.version ? '<span class="ok">' + esc(r.version) + '</span>' : '<span class="warn">no answer</span>'],
         ['Modem', esc(r.modem)],
         ['FX.25', esc(r.fx25)],
       ])) +
@@ -244,11 +245,16 @@ function gpsPage(main) {
 }
 
 // ---- Router ----
+// Other files (forms.js) add their pages to this object before the first route() runs.
 const pages = { dashboard, terminal, gps: gpsPage };
-let cleanup = null;
+let cleanup = null, current = '', guard = null; // guard(): false keeps the user on a page with unsaved changes
+function setGuard(fn) { guard = fn; }
 async function route() {
-  if (cleanup) { cleanup(); cleanup = null; }
   const name = pages[location.hash.slice(1)] ? location.hash.slice(1) : 'dashboard';
+  if (guard && name !== current && !guard()) { history.replaceState(null, '', '#' + current); return; }
+  guard = null;
+  if (cleanup) { cleanup(); cleanup = null; }
+  current = name;
   document.querySelectorAll('nav a').forEach((a) => a.classList.toggle('act', a.dataset.page === name));
   $('#nav').classList.remove('open');
   const main = $('#main');
@@ -262,4 +268,5 @@ async function route() {
 }
 $('#menu').onclick = () => $('#nav').classList.toggle('open');
 window.addEventListener('hashchange', route);
-route();
+window.addEventListener('beforeunload', (e) => { if (guard && !guard(true)) e.preventDefault(); });
+window.addEventListener('DOMContentLoaded', route);
