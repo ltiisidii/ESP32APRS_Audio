@@ -88,10 +88,10 @@ const LH_SORT = {
 
 async function dashboard(main) {
   // Fixed order, most watched first: status strip, last heard, then detail cards in even rows
+  // Station panel: status strip on top, last heard as the main column, details stacked on the side
   main.innerHTML = '<h1>Dashboard</h1><div class="strip" id="strip"></div>' +
-    '<div class="card wide"><h2>Last heard <a href="#terminal">[RAW]</a></h2><div class="scroll"><table class="list" id="lh"></table></div></div>' +
-    '<div class="grid3" id="ov"></div>' +
-    '<div class="actions"><button class="btn danger" id="reboot">Reboot</button></div>';
+    '<div class="dash"><div class="card lhcard"><h2>Last heard <a href="#terminal">[RAW]</a></h2><div class="scroll lhscroll"><table class="list" id="lh"></table></div></div>' +
+    '<aside class="side"><div id="ov"></div><div class="actions"><button class="btn danger" id="reboot">Reboot</button></div></aside></div>';
   $('#reboot').onclick = async () => {
     if (!confirm('Reboot the device?')) return;
     try { await api('/api/reboot', { method: 'POST' }); toast('Rebooting...'); } catch (e) { toast(e.message); }
@@ -152,6 +152,15 @@ async function dashboard(main) {
       tag('APRS-IS', n.aprsis) + tag('VPN', n.vpn) + tag('PPPoS', n.ppp) + (n.mqtt !== undefined ? tag('MQTT', n.mqtt) : '') +
       tag('FX.25', r.fx25 !== 'NONE') + '</div>';
     $('#ov').innerHTML =
+      card('Statistics', rows([
+        ['Radio RX', s.rx],
+        ['Packet RX', s.pkt],
+        ['Packet TX', s.tx],
+        ['RF &rarr; INET', s.rf2inet],
+        ['INET &rarr; RF', s.inet2rf],
+        ['Digi', s.digi + ' (duplicates dropped ' + s.dup + ')'],
+        ['Drop / error', s.drop + ' / ' + s.error],
+      ])) +
       card('Radio', rows([
         r.rf && ['Freq TX', r.txFreq + ' MHz'],
         r.rf && ['Freq RX', r.rxFreq + ' MHz'],
@@ -166,15 +175,6 @@ async function dashboard(main) {
         ['RSSI', w.sta ? w.rssi + ' dBm' : '-'],
         ['Access point', esc(w.apIp) + ' (' + w.apClients + ' clients)'],
         ['APRS-IS server', esc(n.aprsHost) + ':' + n.aprsPort],
-      ])) +
-      card('Statistics', rows([
-        ['Radio RX', s.rx],
-        ['Packet RX', s.pkt],
-        ['Packet TX', s.tx],
-        ['RF &rarr; INET', s.rf2inet],
-        ['INET &rarr; RF', s.inet2rf],
-        ['Digi', s.digi + ' (duplicates dropped ' + s.dup + ')'],
-        ['Drop / error', s.drop + ' / ' + s.error],
       ])) +
       card('System', rows([
         ['Firmware', esc(i.version)],
