@@ -19,6 +19,7 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include "ESPAsyncWebServer.h"
+#include <new>
 #include "WebHandlerImpl.h"
 
 bool ON_STA_FILTER(AsyncWebServerRequest *request) {
@@ -42,7 +43,13 @@ AsyncWebServer::AsyncWebServer(uint16_t port)
     if(c == NULL)
       return;
     c->setRxTimeout(3);
-    AsyncWebServerRequest *r = new AsyncWebServerRequest((AsyncWebServer*)s, c);
+    // ESP32APRS: with many connections at once the heap can run out. A plain `new` then throws and the
+    // firmware aborts; refuse the connection instead (the browser retries) and keep a reserve for the station.
+    AsyncWebServerRequest *r = nullptr;
+#ifdef ESP32
+    if(ESP.getFreeHeap() > 40000 && ESP.getMaxAllocHeap() > 8000)
+#endif
+      r = new (std::nothrow) AsyncWebServerRequest((AsyncWebServer*)s, c);
     if(r == NULL){
       c->close(true);
       c->free();
