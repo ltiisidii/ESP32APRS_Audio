@@ -11,22 +11,26 @@ the device before the migration of that page is merged.
 
 ### Dashboard (old `/dashboard`, `/sysinfo`, `/sidebarInfo`)
 
+Layout, in a fixed order: a status strip (uptime, RAM, CPU temperature, WiFi, APRS-IS, packets, mode
+and link tags), the last heard table, then detail cards in even rows: Radio, Network, Statistics,
+System, GPS, Bluetooth.
+
 | Old item | New location | Data source |
 | --- | --- | --- |
-| Up time | Dashboard > System | `/api/info` `uptime` |
+| Up time | Dashboard > status strip | `/api/info` `uptime` |
 | RAM free / total | Dashboard > System (plus lowest free since boot) | `heap`, `heapSize`, `heapMin` |
 | PSRAM free / total (boards with PSRAM) | Dashboard > System | `psram`, `psramSize` |
 | Storage used / total | Dashboard > System | `fsUsed`, `fsTotal` |
 | Battery voltage (when measured) | Dashboard > System | `vbat` |
-| CPU MHz | Dashboard > System (firmware line) | `cpuMhz` |
-| CPU temperature | Dashboard > System | `temp` |
-| Modes enabled: IGATE, DIGI, WX, TRACKER | Dashboard > Modes & links | `modes` |
-| Network status: APRS-IS, VPN, PPPoS, MQTT, FX.25 | Dashboard > Modes & links | `net`, `radio.fx25` |
+| CPU MHz | Dashboard > System (chip line) | `cpuMhz` |
+| CPU temperature | Dashboard > status strip | `temp` |
+| Modes enabled: IGATE, DIGI, WX, TRACKER | Dashboard > status strip tags | `modes` |
+| Network status: APRS-IS, VPN, PPPoS, MQTT, FX.25 | Dashboard > status strip tags | `net`, `radio.fx25` |
 | Statistics: radio RX, packet RX, packet TX, RF2INET, INET2RF, DIGI, DROP/ERR | Dashboard > Statistics (plus digi duplicates dropped) | `stats` |
 | GPS info: lat, lon, alt, satellites, link to the GPS page | Dashboard > GPS (only when GPS is enabled) | `gps` |
 | Radio info: freq TX/RX, TX power (when RF module enabled), modem, FX.25 | Dashboard > Radio | `radio` |
-| APRS-IS server host and port (when iGate enabled) | Dashboard > Modes & links | `net.aprsHost`, `net.aprsPort` |
-| WiFi mode, SSID, RSSI | Dashboard > WiFi (plus IP and AP clients) | `wifi` |
+| APRS-IS server host and port (when iGate enabled) | Dashboard > Network (always shown) | `net.aprsHost`, `net.aprsPort` |
+| WiFi mode, SSID, RSSI | Dashboard > Network (plus IP and AP clients) | `wifi` |
 | Bluetooth master, name, mode (builds with Bluetooth) | Dashboard > Bluetooth | `bt` |
 | Last heard table: time (with time zone), icon, callsign (object/item name), via last path, DX (km/bearing), packets, audio dBV | Dashboard > Last heard | SSE `/eventHeard` (same JSON as before) |
 | Last heard sorting by time, callsign, DX, packets, audio | Click a column header (path also sortable) | in the browser |

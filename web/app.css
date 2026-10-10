@@ -31,15 +31,16 @@ button.btn{padding:6px 14px;background:var(--line);color:var(--text);border:1px 
 button.btn:hover{border-color:var(--accent)}
 button.danger:hover{border-color:var(--bad);color:var(--bad)}
 #toast{position:fixed;right:12px;bottom:12px;padding:8px 12px;background:var(--panel);border:1px solid var(--line);border-radius:4px}
-@media (max-width:700px){
-  #menu{display:block}
-  nav{display:none;width:100%;z-index:3}
-  nav.open{display:block}
-  main{margin-left:0;padding:8px}
-  .grid{grid-template-columns:1fr}
-}
 .muted{color:var(--muted)}
 .wide{margin-top:10px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
+.strip{background:var(--panel);border:1px solid var(--line);border-radius:4px}
+.tiles{display:grid;grid-template-columns:repeat(6,1fr);border-bottom:1px solid var(--line)}
+.tile{padding:8px 10px;border-right:1px solid var(--line)}
+.tile:last-child{border-right:0}
+.tile span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.tile b{display:block;font-size:16px;font-weight:600;margin-top:2px;white-space:nowrap}
+.tags .gap{flex:0 0 12px}
 .card h2 a{text-transform:none;margin-left:6px}
 .scroll{overflow-x:auto}
 table.list{width:100%;border-collapse:collapse;white-space:nowrap}
@@ -60,3 +61,13 @@ table.list{width:100%;border-collapse:collapse;white-space:nowrap}
 pre.log{margin:0;padding:8px 10px;height:55vh;overflow:auto;background:#0a0d10;color:#9fe0a8;font:12px/1.35 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-all}
 nav a.old::after{content:"classic";margin-left:6px;padding:0 4px;border:1px solid var(--line);border-radius:3px;font-size:10px;color:var(--muted)}
 nav .sep:first-child{padding-top:4px}
+@media (max-width:1000px){.grid3{grid-template-columns:repeat(2,1fr)}.tiles{grid-template-columns:repeat(3,1fr)}}
+@media (max-width:700px){
+  #menu{display:block}
+  nav{display:none;width:100%;z-index:3}
+  nav.open{display:block}
+  main{margin-left:0;padding:8px}
+  .grid,.grid3{grid-template-columns:1fr}
+  .tiles{grid-template-columns:repeat(2,1fr)}
+  .tile{border-bottom:1px solid var(--line)}
+}
