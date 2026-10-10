@@ -25,7 +25,9 @@ const iconUrl = (sym) => {
 };
 
 function control(f) {
-  const id = fid(f), v = orig(f), w = f.w ? ' style="width:' + f.w + 'ch"' : '';
+  // number inputs also hold the browser's up/down arrows: give them room so the digits stay visible
+  const wch = f.w && (f.t === 'num' ? f.w + 4 : f.w);
+  const id = fid(f), v = orig(f), w = wch ? ' style="width:' + wch + 'ch"' : '';
   switch (f.t) {
     case 'sw':
       return '<label class="sw"><input type="checkbox" id="' + id + '"' + (v ? ' checked' : '') + '><i></i></label>';

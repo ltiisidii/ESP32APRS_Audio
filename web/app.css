@@ -75,7 +75,7 @@ input,select{font:inherit;color:var(--text);background:#0f1318;border:1px solid 
 input:focus,select:focus{outline:0;border-color:var(--accent)}
 input:invalid{border-color:var(--bad)}
 input.up{text-transform:uppercase}
-input[type=number]{width:12ch}
+input[type=number]{width:14ch}
 input[type=range]{vertical-align:middle;width:180px;padding:0}
 .rv{margin-left:8px}
 .sw{position:relative;display:inline-block;width:34px;height:18px;vertical-align:middle}
