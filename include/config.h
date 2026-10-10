@@ -509,4 +509,14 @@ bool saveConfiguration(const char *filename, const Configuration &config);
 bool loadConfiguration(const char *filename, Configuration &config);
 bool loadConfigurationWithBackup(const char *filename, Configuration &config);
 
+#include <ArduinoJson.h>
+void configToJson(const Configuration &config, JsonDocument &doc);
+void configFromJson(JsonDocument &doc, Configuration &config);
+#define CFG_SECRET_MASK "********"
+// Replaces passwords and keys with CFG_SECRET_MASK (web API output)
+void configMaskSecrets(JsonDocument &doc);
+// Applies a partial JSON (same keys as /default.cfg) to cfg. Unknown keys and wrong types are
+// ignored; masked secrets keep their current value. Returns keys applied, -1 if not an object.
+int configApplyPatch(Configuration &cfg, JsonDocument &patch);
+
 #endif

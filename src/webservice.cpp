@@ -14,6 +14,7 @@
 #include <LibAPRSesp.h>
 #include <parse_aprs.h>
 #include "jquery_min_js.h"
+#include "webapi.h"
 #include <ESPCPUTemp.h>
 #include "esp_wifi.h"
 #include "esp_heap_caps.h"
@@ -12219,8 +12220,9 @@ void webService()
 	ws.onEvent(onWsEvent);
 
 	// web client handlers
-	async_server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
+	async_server.on("/classic", HTTP_GET, [](AsyncWebServerRequest *request)
 					{ setMainPage(request); });
+	webApiRegister(async_server); // new UI on "/", old one stays on /classic until migrated
 	async_server.on("/symbol", HTTP_GET, [](AsyncWebServerRequest *request)
 					{ handle_symbol(request); });
 	// async_server.on("/symbol2", HTTP_GET | HTTP_POST, [](AsyncWebServerRequest *request)
