@@ -170,7 +170,7 @@ async function formPage(main, specFn) {
     spec.sections.map((s, n) => '<a href="#" data-t="' + n + '">' + s.title + '</a>').join('') + '</div>' : '';
   main.innerHTML = '<div class="phead"><h1>' + spec.title + '</h1>' + pill + '</div>' + (spec.intro ? '<p class="muted intro">' + spec.intro + '</p>' : '') + tabs +
     '<form id="cfgForm" autocomplete="off">' + spec.sections.map((s, n) => '<div class="card form" data-s="' + n + '"><h2>' + s.title + '</h2>' +
-      (s.html || s.fields.map(row).join('')) + (s.note ? '<div class="hint pad">' + s.note + '</div>' : '') + '</div>').join('') +
+      (s.html || s.fields.map(row).join('')) + (s.extra || '') + (s.note ? '<div class="hint pad">' + s.note + '</div>' : '') + '</div>').join('') +
     '<div class="savebar"><span id="dirty" class="muted"></span><button type="button" class="btn" id="undo">Undo changes</button>' +
     '<button type="submit" class="btn primary" id="save">Save</button></div></form>';
   const form = $('#cfgForm');

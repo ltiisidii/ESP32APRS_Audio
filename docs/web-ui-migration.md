@@ -148,7 +148,55 @@ shorter than 8 characters.
 `/radio`, `/igate`, `/digi`, `/tracker`, `/wireless` and the `/symbol` picker popup (about 3,650 lines).
 The classic shell sends those tabs to the new pages.
 
-## Stage 4 and later
+## Stage 4a: System, About, Files
 
-Weather, Telemetry, Sensors, Messages, MQTT, VPN, Modules, System, Files, About. A table like the ones
-above is added for each page when it is migrated.
+### System (old `/system`)
+
+| Old item | New location / key | Behaviour |
+| --- | --- | --- |
+| Host name | System > General (`hostName`) | |
+| Auto reboot (minutes, 0 = no) | System > General (`resetTimeout`) | |
+| Local date/time "Time Update" | System > Clock: "Set to this computer's time" or a date picker | `POST /api/time` |
+| NTP host, time zone (40 zones) | System > Clock (`ntpHost`, `timeZone`) | `configTime` re-run at once, as before |
+| REBOOT | System > System control | Telemetry sequences reset as before |
+| Factory Reset | System > System control, after typing RESET | Now saves the defaults and restarts; the old button only reset RAM and never answered |
+| Load Default (reload `/default.cfg`) | System > System control > Reload | `POST /api/reload` |
+| Web user and password | System > Web login (`httpUser`, `httpPass`) | Password masked, kept unless retyped |
+| PATH user define 1-4 | System > User defined paths (`path`) | |
+| Power save: enable, GPIO, active level, sleep interval, standby delay, mode A/B/C, wake events | System > Power save (`pwr*`) | |
+| Log file events (builds with `LOG_FILE`; none today) | System > Log file (`logFile`) | |
+| Display: enable, flip, TX/RX display, heading up, brightness, popup delay, sleep, RF/Internet popup, max distance, popup types | System > Display (`dsp*`), builds with a display only | TFT brightness applied at once, as before. "Heading up" is now saved (the old form never sent it) |
+
+### About (old `/about`)
+
+| Old item | New location |
+| --- | --- |
+| Hardware version, firmware version, RF module, chip model, revision, chip ID, flash, PSRAM, file system | About > System (`GET /api/about`) |
+| Developer/support information (Mr. Somkiat Nakhonthai, HS5TQA) with all links | About > Credits, unchanged, plus the notice of this modified version (GPL v3 section 5a): modified fork by Jonatan, LU6EWB |
+| WiFi status: mode and protocol, MAC, channel, TX power, SSID, IP, gateway, DNS | About > WiFi |
+| PPPoS status: manufacturer, model, IMEI, IMSI, operator, RSSI, IP, gateway | About > PPPoS (builds with PPPoS) |
+| Manual firmware update with progress | About > Firmware update (same `/update` endpoint) |
+| Online OTA update and version check | About > Firmware update, only when the build sets `OTA_SERVER_URL` (off by default) |
+
+### Files (old `/storage`)
+
+| Old item | New location |
+| --- | --- |
+| Total and used space | Files > Storage |
+| File list with size, download, delete | Files > Files (`GET /api/files`, `/api/files/get`, `/api/files/delete`) |
+| Upload | Files > Upload (`POST /api/files/upload`) |
+| Format (was commented out of the page, endpoint still open) | Files > Format, after typing FORMAT; the running settings are written back |
+
+The old `/download`, `/delete`, `/format` and `/upload` endpoints had no login: anyone on the network could
+download `default.cfg` with every password in it, delete files or format the flash. They are gone; the new
+endpoints need the web login and accept plain file names only (no paths, no `..`).
+
+### Removed with this stage
+
+`/system`, `/about`, `/storage`, `/download`, `/delete`, `/format`, `/upload` (about 2,160 lines).
+`/update`, `/ota_url` and `/check_version` stay: the new About page uses them.
+
+## Stage 4b and 4c
+
+Weather, Telemetry, Sensors, Modules (4b); Messages, MQTT, VPN, then removal of `/classic`, jQuery and the
+old style sheet (4c). A table like the ones above is added for each page when it is migrated.
