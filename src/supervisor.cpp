@@ -10,6 +10,7 @@
 
 #define SV_CHECK_PERIOD_MS 1000
 #define SV_ADC_STALL_MS 30000      // RX audio sampling stopped
+#define SV_ADC_PAUSE_MAX_MS 300000 // RX audio paused on purpose (OTA, saving) for longer than this
 #define SV_OTA_CONFIRM_MS 120000   // healthy run time before confirming a new OTA firmware
 #define SV_RESET_MAGIC 0x53555056  // "SUPV"
 #define SV_REPORT_MS 600000        // health report period in the log
@@ -17,6 +18,8 @@
 extern volatile uint32_t adcIsrCount; // AFSK.cpp, counts ADC sampling interrupts
 bool getTransmit();                   // AFSK.cpp, true while PTT/TX is active
 bool AFSK_SamplingExpected(void);     // AFSK.cpp, false while TX or squelch-gated ADC is off
+extern volatile bool adcPaused;              // AFSK.cpp, RX sampling switched off on purpose
+extern volatile uint32_t adcPausedSince;     // AFSK.cpp, millis() when it was switched off
 extern volatile uint32_t fifoOverflowCount; // AFSK.cpp, ADC samples dropped (FIFO full)
 
 extern TaskHandle_t taskNetworkHandle, taskAPRSHandle, taskAPRSPollHandle;
@@ -33,6 +36,12 @@ static TaskHandle_t svHandle[SV_TASK_COUNT];
 // Survives esp_restart(), so the reason can be logged after the reboot
 RTC_NOINIT_ATTR static uint32_t svResetMagic;
 RTC_NOINIT_ATTR static char svResetReason[48];
+static char svLastReason[48]; // copy taken at boot: why the previous run was restarted ("" = not by us)
+
+const char *supervisorLastRestart(void)
+{
+    return svLastReason;
+}
 
 // Arduino marks a new OTA image valid at boot unless this returns true.
 // We confirm it ourselves after SV_OTA_CONFIRM_MS of healthy operation.
@@ -135,6 +144,11 @@ static void taskSupervisor(void *pvParameters)
         }
 
         uint32_t adc = adcIsrCount;
+        if (adcPaused && (uint32_t)(now - adcPausedSince) > SV_ADC_PAUSE_MAX_MS)
+        {
+            // a pause that never ended (e.g. an OTA upload aborted halfway): the station would stay deaf
+            supervisorRestart("RX ADC paused too long");
+        }
         if (getTransmit() || !AFSK_SamplingExpected())
         {
             lastAdcChange = now; // sampling legitimately paused (TX, or squelch closed on ESP32)
@@ -170,6 +184,7 @@ void supervisorStart(void)
     {
         svResetReason[sizeof(svResetReason) - 1] = 0;
         log_e("SUPERVISOR: last restart was forced: %s", svResetReason);
+        strlcpy(svLastReason, svResetReason, sizeof(svLastReason));
     }
     svResetMagic = 0;
 

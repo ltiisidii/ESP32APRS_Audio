@@ -563,6 +563,10 @@ uint16_t CountOnesFromInteger(uint16_t value)
 // #endif
 
 volatile int8_t adcEn = 0;
+// adcEn is a one-shot request (taskAPRS acts on it and clears it); this is the state it leaves behind.
+// Only those deliberate pauses (OTA upload, config save) set it, not the squelch gating or TX.
+volatile bool adcPaused = false;
+volatile uint32_t adcPausedSince = 0; // millis() when it was paused
 volatile int8_t dacEn = 0;
 volatile bool pttOff = false;
 
@@ -1554,6 +1558,8 @@ bool AFSK_SamplingExpected(void)
 {
   if (hw_afsk_dac_isr)
     return false; // TX: sampling paused
+  if (adcPaused)
+    return false; // paused on purpose (OTA update, config save): a slow OTA used to trip the supervisor
 #if defined(ADC_SAMPLE)
   if (_sql_pin > -1 && !sqlActive)
     return false; // original ESP32 stops the ADC timer while the squelch is closed

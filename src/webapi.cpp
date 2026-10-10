@@ -30,6 +30,7 @@
 #include "web_assets.h"
 #include "millis64.h"
 #include "webfeed.h"
+#include "supervisor.h"
 #include "sensor.h"
 #include "wireguard_vpn.h"
 #include "esp_wifi.h"
@@ -52,6 +53,9 @@ extern PubSubClient clientMQTT;
 
 extern bool VBat_Flag;
 extern bool initInterval;
+extern volatile int rfRssi;
+extern String rfRssiRaw;
+extern const char *volatile rfRssiState;
 
 
 
@@ -129,6 +133,7 @@ static void apiInfo(AsyncWebServerRequest *request)
     if (VBat_Flag)
         doc["vbat"] = serialized(String(VBat, 2));
     doc["uptime"] = (uint32_t)(millis64() / 1000);
+    doc["lastRestart"] = supervisorLastRestart(); // "" unless the supervisor forced the last restart
     doc["time"] = (uint32_t)time(NULL);
     doc["tz"] = config.timeZone;
     doc["heap"] = ESP.getFreeHeap();
@@ -175,6 +180,22 @@ static void apiInfo(AsyncWebServerRequest *request)
     m["tracker"] = config.trk_en;
     m["wx"] = config.wx_en;
 
+    // Callsign-SSID each enabled function uses on the air / on APRS-IS (every function has its own)
+    JsonArray ids = doc["idents"].to<JsonArray>();
+    auto ident = [&](const char *role, bool en, const char *call, uint8_t ssid) {
+        if (!en)
+            return;
+        JsonObject o = ids.add<JsonObject>();
+        o["role"] = role;
+        o["call"] = ssid ? String(call) + "-" + ssid : String(call);
+        o["set"] = call[0] && strcasecmp(call, "NOCALL") != 0;
+    };
+    ident("iGate", config.igate_en, config.aprs_mycall, config.aprs_ssid);
+    ident("Digi", config.digi_en, config.digi_mycall, config.digi_ssid);
+    ident("Tracker", config.trk_en, config.trk_mycall, config.trk_ssid);
+    ident("WX", config.wx_en, config.wx_mycall, config.wx_ssid);
+    ident("TLM", config.tlm0_en, config.tlm0_mycall, config.tlm0_ssid);
+
     JsonObject r = doc["radio"].to<JsonObject>();
     r["rf"] = config.rf_en;
     if (config.rf_en)
@@ -182,6 +203,11 @@ static void apiInfo(AsyncWebServerRequest *request)
         r["txFreq"] = serialized(String(config.freq_tx, 4));
         r["rxFreq"] = serialized(String(config.freq_rx, 4));
         r["power"] = config.rf_power ? "HIGH" : "LOW";
+        if (rfRssi >= 0)
+            r["rssi"] = rfRssi; // raw 0..255 from the SA868, read every 5 s
+        r["rssiState"] = rfRssiState;
+        if (rfRssiRaw.length())
+            r["rssiRaw"] = rfRssiRaw; // module answer as received (diagnostics)
         if (RF_VERSION.length())
             r["version"] = RF_VERSION; // answer of the module to AT+VERSION at boot: proves the UART link works
     }
