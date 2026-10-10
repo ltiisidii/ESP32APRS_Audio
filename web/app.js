@@ -81,8 +81,10 @@ const LH_SORT = {
 };
 
 async function dashboard(main) {
-  main.innerHTML = '<h1>Dashboard</h1><div class="grid" id="ov"></div>' +
+  // Fixed order, most watched first: status strip, last heard, then detail cards in even rows
+  main.innerHTML = '<h1>Dashboard</h1><div class="strip" id="strip"></div>' +
     '<div class="card wide"><h2>Last heard <a href="#terminal">[RAW]</a></h2><div class="scroll"><table class="list" id="lh"></table></div></div>' +
+    '<div class="grid3" id="ov"></div>' +
     '<div class="actions"><button class="btn danger" id="reboot">Reboot</button></div>';
   $('#reboot').onclick = async () => {
     if (!confirm('Reboot the device?')) return;
@@ -128,24 +130,22 @@ async function dashboard(main) {
     const w = i.wifi, s = i.stats, r = i.radio, n = i.net, g = i.gps;
     if (i.tz !== tz) { tz = i.tz; drawLH(); }
     $('#call').textContent = i.callsign + (i.ssid ? '-' + i.ssid : '');
+    const tile = (label, value, cls) => '<div class="tile"><span>' + label + '</span><b' + (cls ? ' class="' + cls + '"' : '') + '>' + value + '</b></div>';
+    const heapPct = Math.round((100 * i.heap) / i.heapSize);
+    $('#strip').innerHTML =
+      '<div class="tiles">' +
+      tile('Uptime', fmtUptime(i.uptime)) +
+      tile('RAM free', heapPct + '%', heapPct < 15 ? 'bad' : heapPct < 30 ? 'warn' : '') +
+      tile('CPU temp', i.temp !== undefined ? i.temp + '&deg;C' : 'N/A') +
+      tile('WiFi', w.sta ? w.rssi + ' dBm' : 'AP only', w.sta ? '' : 'warn') +
+      tile('APRS-IS', n.aprsis ? 'connected' : i.modes.igate ? 'down' : 'off', n.aprsis ? 'ok' : i.modes.igate ? 'bad' : '') +
+      tile('Packets RX / TX', s.pkt + ' / ' + s.tx) +
+      '</div><div class="tags">' +
+      tag('IGATE', i.modes.igate) + tag('DIGI', i.modes.digi) + tag('WX', i.modes.wx) + tag('TRACKER', i.modes.tracker) +
+      '<span class="gap"></span>' +
+      tag('APRS-IS', n.aprsis) + tag('VPN', n.vpn) + tag('PPPoS', n.ppp) + (n.mqtt !== undefined ? tag('MQTT', n.mqtt) : '') +
+      tag('FX.25', r.fx25 !== 'NONE') + '</div>';
     $('#ov').innerHTML =
-      card('System', rows([
-        ['Firmware', esc(i.version) + ' &middot; ' + esc(i.chip) + ' @ ' + i.cpuMhz + ' MHz'],
-        ['Uptime', fmtUptime(i.uptime)],
-        ['RAM free', kb(i.heap) + ' / ' + kb(i.heapSize) + ' (min ' + kb(i.heapMin) + ')' + bar(i.heapSize - i.heap, i.heapSize)],
-        i.psramSize && ['PSRAM free', kb(i.psram) + ' / ' + kb(i.psramSize)],
-        ['Storage', kb(i.fsUsed) + ' / ' + kb(i.fsTotal) + bar(i.fsUsed, i.fsTotal)],
-        i.vbat !== undefined && ['Battery', i.vbat + ' V'],
-        ['CPU temp', i.temp !== undefined ? i.temp + ' &deg;C' : 'N/A'],
-      ])) +
-      card('Modes &amp; links', '<div class="tags">' +
-        tag('IGATE', i.modes.igate) + tag('DIGI', i.modes.digi) + tag('WX', i.modes.wx) + tag('TRACKER', i.modes.tracker) +
-        '</div><div class="tags">' +
-        tag('APRS-IS', n.aprsis) + tag('VPN', n.vpn) + tag('PPPoS', n.ppp) + (n.mqtt !== undefined ? tag('MQTT', n.mqtt) : '') +
-        tag('FX.25', r.fx25 !== 'NONE') + '</div>' +
-        rows([
-          i.modes.igate && ['APRS-IS server', esc(n.aprsHost) + ':' + n.aprsPort + (n.aprsis ? ' <span class="ok">connected</span>' : ' <span class="warn">disconnected</span>')],
-        ])) +
       card('Radio', rows([
         r.rf && ['Freq TX', r.txFreq + ' MHz'],
         r.rf && ['Freq RX', r.rxFreq + ' MHz'],
@@ -153,11 +153,12 @@ async function dashboard(main) {
         ['Modem', esc(r.modem)],
         ['FX.25', esc(r.fx25)],
       ])) +
-      card('WiFi', rows([
-        ['Mode', w.mode],
+      card('Network', rows([
+        ['WiFi mode', w.mode],
         ['Client', w.sta ? '<span class="ok">' + esc(w.ssid) + '</span> ' + esc(w.ip) : '<span class="warn">disconnected</span>'],
         ['RSSI', w.sta ? w.rssi + ' dBm' : '-'],
         ['Access point', esc(w.apIp) + ' (' + w.apClients + ' clients)'],
+        ['APRS-IS server', esc(n.aprsHost) + ':' + n.aprsPort],
       ])) +
       card('Statistics', rows([
         ['Radio RX', s.rx],
@@ -167,6 +168,14 @@ async function dashboard(main) {
         ['INET &rarr; RF', s.inet2rf],
         ['Digi', s.digi + ' (duplicates dropped ' + s.dup + ')'],
         ['Drop / error', s.drop + ' / ' + s.error],
+      ])) +
+      card('System', rows([
+        ['Firmware', esc(i.version)],
+        ['Chip', esc(i.chip) + ' @ ' + i.cpuMhz + ' MHz'],
+        ['RAM free', kb(i.heap) + ' / ' + kb(i.heapSize) + ' (min ' + kb(i.heapMin) + ')' + bar(i.heapSize - i.heap, i.heapSize)],
+        i.psramSize && ['PSRAM free', kb(i.psram) + ' / ' + kb(i.psramSize)],
+        ['Storage', kb(i.fsUsed) + ' / ' + kb(i.fsTotal) + bar(i.fsUsed, i.fsTotal)],
+        i.vbat !== undefined && ['Battery', i.vbat + ' V'],
       ])) +
       (g.en ? card('GPS <a href="#gps">[View]</a>', rows(g.lat !== undefined ? [
         ['Lat', g.lat], ['Lon', g.lng], ['Alt', g.alt + ' m'], ['Sat', g.sat],
