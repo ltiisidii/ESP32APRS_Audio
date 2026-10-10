@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ESP32APRS</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header>
+  <button id="menu" aria-label="Menu">&#9776;</button>
+  <b id="brand">ESP32APRS</b>
+  <span id="call"></span>
+  <span class="grow"></span>
+  <span id="conn" class="dot"></span>
+</header>
+<nav id="nav">
+  <a href="#overview" data-page="overview">Overview</a>
+  <div class="sep">Classic UI</div>
+  <a href="/classic">Dashboard</a>
+  <a href="/classic">Radio</a>
+  <a href="/classic">iGate</a>
+  <a href="/classic">Digipeater</a>
+  <a href="/classic">Tracker</a>
+  <a href="/classic">WiFi / Network</a>
+  <a href="/classic">System</a>
+</nav>
+<main id="main"></main>
+<div id="toast" hidden></div>
+<script src="/app.js"></script>
+</body>
+</html>

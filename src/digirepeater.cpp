@@ -6,6 +6,71 @@ RTC_DATA_ATTR uint8_t digiCount = 0;
 
 extern Configuration config;
 
+// ---- duplicate suppression (see digirepeater.h)
+struct DigiDup
+{
+    uint32_t hash;
+    uint32_t time;
+    bool used;
+};
+static DigiDup digiDup[DIGI_DUP_TABLE_SIZE];
+static uint8_t digiDupIdx = 0;
+
+// FNV-1a over source, destination and information field (not the path: the same packet heard
+// again through another digipeater has a different path)
+static uint32_t digiHash(const AX25Msg &p)
+{
+    uint32_t h = 2166136261u;
+    auto mix = [&h](uint8_t b) { h = (h ^ b) * 16777619u; };
+    for (size_t i = 0; i < sizeof(p.src.call) && p.src.call[i]; i++)
+        mix((uint8_t)p.src.call[i]);
+    mix(p.src.ssid);
+    mix('>');
+    for (size_t i = 0; i < sizeof(p.dst.call) && p.dst.call[i]; i++)
+        mix((uint8_t)p.dst.call[i]);
+    mix(p.dst.ssid);
+    mix(':');
+    for (size_t i = 0; i < p.len && i < sizeof(p.info); i++)
+        mix(p.info[i]);
+    return h;
+}
+
+bool digiIsDuplicate(const AX25Msg &Packet, uint32_t nowMs)
+{
+    uint32_t h = digiHash(Packet);
+    for (int i = 0; i < DIGI_DUP_TABLE_SIZE; i++)
+    {
+        if (digiDup[i].used && digiDup[i].hash == h && (uint32_t)(nowMs - digiDup[i].time) < DIGI_DUP_WINDOW_MS)
+            return true;
+    }
+    return false;
+}
+
+void digiRemember(const AX25Msg &Packet, uint32_t nowMs)
+{
+    digiDup[digiDupIdx].hash = digiHash(Packet);
+    digiDup[digiDupIdx].time = nowMs;
+    digiDup[digiDupIdx].used = true;
+    digiDupIdx = (digiDupIdx + 1) % DIGI_DUP_TABLE_SIZE;
+}
+
+// Insert our call at path position idx (marked as repeated). False if the path is full.
+static bool digiInsertOwnCall(AX25Msg &P, int idx)
+{
+    if (P.rpt_count >= AX25_MAX_RPT || idx < 0 || idx > P.rpt_count)
+        return false;
+    for (int k = P.rpt_count; k > idx; k--)
+        P.rpt_list[k] = P.rpt_list[k - 1];
+    uint8_t low = P.rpt_flags & (uint8_t)((1u << idx) - 1);
+    uint8_t high = (uint8_t)((P.rpt_flags >> idx) << (idx + 1));
+    P.rpt_flags = low | high | (uint8_t)(1u << idx);
+    memset(P.rpt_list[idx].call, 0, sizeof(P.rpt_list[idx].call));
+    strlcpy(P.rpt_list[idx].call, config.digi_mycall, sizeof(P.rpt_list[idx].call));
+    P.rpt_list[idx].ssid = config.digi_ssid;
+    P.rpt_count++;
+    return true;
+}
+
 int digiProcess(AX25Msg &Packet)
 {
     int idx, j;
@@ -163,6 +228,9 @@ int digiProcess(AX25Msg &Packet)
                 {
                     Packet.rpt_list[idx].ssid = ctmp;
                     Packet.rpt_flags &= ~(1 << idx);
+#if DIGI_TRACE_WIDEN
+                    digiInsertOwnCall(Packet, idx); // path full: only decrement, as before
+#endif
                     j = 2;
                     break;
                 }

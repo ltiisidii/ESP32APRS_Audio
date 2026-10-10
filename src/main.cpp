@@ -1773,7 +1773,9 @@ void defaultConfig()
     config.igate_loc2rf = false;
     config.igate_loc2inet = true;
     config.rf2inetFilter = 0xFFFF; // All
-    config.inet2rfFilter = config.digiFilter = FILTER_OBJECT | FILTER_ITEM | FILTER_MESSAGE | FILTER_MICE | FILTER_POSITION | FILTER_WX;
+    // INET->RF: messages only. Gating positions/WX/objects from APRS-IS to RF floods the channel.
+    config.inet2rfFilter = FILTER_MESSAGE;
+    config.digiFilter = DIGI_FILTER_DEFAULT;
     //--APRS-IS
     config.aprs_ssid = 1;
     config.aprs_port = 14580;
@@ -1813,7 +1815,7 @@ void defaultConfig()
     config.digi_interval = 600;
     config.igate_timestamp = false;
     config.digi_delay = 0;
-    config.digiFilter = FILTER_OBJECT | FILTER_ITEM | FILTER_MESSAGE | FILTER_MICE | FILTER_POSITION | FILTER_WX;
+    config.digiFilter = DIGI_FILTER_DEFAULT; // a digipeater repeats every APRS packet type
 
     sprintf(config.digi_symbol, "A#");
     memset(config.digi_phg, 0, sizeof(config.digi_phg));
@@ -7875,11 +7877,16 @@ void taskAPRS(void *pvParameters)
                 {
                     // Packet recheck
                     pkgTxDuplicate(incomingPacket); // Search duplicate in tx and drop packet for renew
-                    int dlyFlag = digiProcess(incomingPacket);
+                    // Already repeated in the last 30 s (heard back through another digipeater)?
+                    bool digiDup = digiIsDuplicate(incomingPacket, millis());
+                    int dlyFlag = digiDup ? 0 : digiProcess(incomingPacket);
+                    if (digiDup)
+                        log_d("DIGI: duplicate, not repeated");
                     log_d("Digi Process Flag=%d\n", dlyFlag);
                     if (dlyFlag > 0)
                     {
                         int digiDelay=0;
+                        digiRemember(incomingPacket, millis()); // path changed, src/dst/info did not
                         status.digiCount++;
                         if (dlyFlag == 1)
                         {
