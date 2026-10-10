@@ -27,9 +27,9 @@ table.kv{width:100%;border-collapse:collapse}
 .bar{height:6px;background:var(--line);border-radius:3px;margin-top:3px}
 .bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
 .actions{margin-top:10px;display:flex;gap:8px}
-button.btn{padding:6px 14px;background:var(--line);color:var(--text);border:1px solid #39414d;border-radius:4px;cursor:pointer;font:inherit}
-button.btn:hover{border-color:var(--accent)}
-button.danger:hover{border-color:var(--bad);color:var(--bad)}
+.btn{display:inline-block;text-decoration:none;padding:6px 14px;background:var(--line);color:var(--text);border:1px solid #39414d;border-radius:4px;cursor:pointer;font:inherit}
+.btn:hover{border-color:var(--accent)}
+.btn.danger:hover{border-color:var(--bad);color:var(--bad)}
 #toast{position:fixed;right:12px;bottom:12px;padding:8px 12px;background:var(--panel);border:1px solid var(--line);border-radius:4px}
 .muted{color:var(--muted)}
 .wide{margin-top:10px}
@@ -75,7 +75,7 @@ input,select{font:inherit;color:var(--text);background:#0f1318;border:1px solid 
 input:focus,select:focus{outline:0;border-color:var(--accent)}
 input:invalid{border-color:var(--bad)}
 input.up{text-transform:uppercase}
-input[type=number]{width:12ch}
+input[type=number]{width:14ch}
 input[type=range]{vertical-align:middle;width:180px;padding:0}
 .rv{margin-left:8px}
 .sw{position:relative;display:inline-block;width:34px;height:18px;vertical-align:middle}
@@ -115,6 +115,11 @@ table.tlm input,table.tlm select{width:auto}
 .tabs a{padding:6px 12px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
 .tabs a:hover{color:var(--text)}
 .tabs a.act{color:var(--text);border-bottom-color:var(--accent)}
+.pad{padding:8px 10px}
+.bar.big{height:10px;margin:4px 0}
+.actions.inline{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px}
+td.acts{text-align:right;white-space:nowrap}
+.btn.danger{border-color:#6b2a2a}
 @media (max-width:1000px){.grid3{grid-template-columns:repeat(2,1fr)}.tiles{grid-template-columns:repeat(3,1fr)}}
 @media (max-width:700px){
   #menu{display:block}
