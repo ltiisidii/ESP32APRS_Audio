@@ -130,11 +130,7 @@ void handle_service();
 void handle_firmware();
 void webService();
 extern void RF_MODULE(bool boot);
-//void handle_ws(String Raw,uint16_t mVrms);
-void handle_ws(char *Raw,size_t len,uint16_t mVrms);
-void handle_ws_gnss(char *nmea);
-void handle_ws_gnss(char *nmea, size_t size);
-void event_lastHeard(bool gethtml=false);
 String event_chatMessage(bool gethtml=false);
+String lastHeardJson();
 
 #endif

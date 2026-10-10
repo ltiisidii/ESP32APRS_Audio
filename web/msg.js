@@ -51,16 +51,21 @@ pages.messages = async (main) => {
     $('#sendBtn').disabled = true;
     try {
       await post('/api/messages/send', { to: sel, text });
+      refresh().catch(() => {}); // show it at once
       $('#msgText').value = '';
       $('#cnt').textContent = '0/67';
     } catch (err) { toast('Not sent: ' + err.message); }
     $('#sendBtn').disabled = false;
   };
 
-  list = await api('/api/messages');
-  draw();
-  const es = new EventSource('/eventMsg');
-  es.addEventListener('chatMsg', (e) => { try { list = JSON.parse(e.data); draw(); } catch (err) { /* partial frame */ } });
+  let listText = '';
+  const refresh = async () => {
+    const r = await fetch('/api/messages');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const txt = await r.text();
+    if (txt !== listText) { listText = txt; list = JSON.parse(txt); draw(); }
+  };
+  const stopPoll = poller(refresh, 3000);
 
   // Settings of the old MSG tab, below the chat
   const cfgBox = $('#msgCfg');
@@ -82,7 +87,7 @@ pages.messages = async (main) => {
       ],
     }],
   }));
-  return () => es.close();
+  return () => stopPoll();
 };
 
 // ---- VPN (old VPN tab, WireGuard) ----
