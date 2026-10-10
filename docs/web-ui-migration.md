@@ -29,6 +29,7 @@ System, GPS, Bluetooth.
 | Statistics: radio RX, packet RX, packet TX, RF2INET, INET2RF, DIGI, DROP/ERR | Dashboard > Statistics (plus digi duplicates dropped) | `stats` |
 | GPS info: lat, lon, alt, satellites, link to the GPS page | Dashboard > GPS (only when GPS is enabled) | `gps` |
 | Radio info: freq TX/RX, TX power (when RF module enabled), modem, FX.25 | Dashboard > Radio | `radio` |
+| (new) RF module version as answered at boot (SA868/SR_FRS); "no answer" means the UART link failed | Dashboard > Radio | `radio.version` |
 | APRS-IS server host and port (when iGate enabled) | Dashboard > Network (always shown) | `net.aprsHost`, `net.aprsPort` |
 | WiFi mode, SSID, RSSI | Dashboard > Network (plus IP and AP clients) | `wifi` |
 | Bluetooth master, name, mode (builds with Bluetooth) | Dashboard > Bluetooth | `bt` |
@@ -67,8 +68,87 @@ Like the TNC2 page, the old GPS page loaded scripts from the internet; the new o
   inserted as text, never as HTML. The old last heard table inserted it as HTML, so a crafted packet
   could run script in the browser of whoever had the dashboard open.
 
-## Stage 3 and later
+## Stage 3: main configuration pages
 
-Radio, iGate, Digipeater, Tracker, WiFi (stage 3); Weather, Telemetry, Sensors, Messages, MQTT, VPN,
-Modules, System, Files, About (stage 4). A table like the ones above is added for each page when it
-is migrated.
+All five pages are drawn from field lists in `web/forms.js` and read `GET /api/config`. Save sends
+only the changed keys to `POST /api/config`. Passwords come back masked and are kept unless retyped.
+Each page also has: section tabs, an Enabled/Disabled badge, a warning before leaving with unsaved
+changes, and an Undo button.
+
+### What saving does (same as the old pages)
+
+| Old page action | New behaviour |
+| --- | --- |
+| Radio: save, then re-program the RF module (`RF_MODULE`) | Done when any RF module field changed, after the HTTP answer |
+| TNC: save, then re-init the modem (`afskSetModem`) | Done when modem, FX.25, de-emphasis, time slot or preamble changed |
+| iGate: save, restart the beacon timers, drop APRS-IS (`aprsIsStop`) | Timers restart on any change; APRS-IS reconnects when callsign, SSID, server, port, filter or enable changed |
+| Digi / Tracker: save, restart the beacon timers | Same |
+| WiFi: save, set the WiFi TX power at once | Same; mode, AP and network changes need a reboot, and the page offers one |
+| Callsign trimmed and upper-cased | Same (browser and firmware) |
+
+### Radio (old `/radio`)
+
+| Old item | New location / key |
+| --- | --- |
+| RF module enable, module type | Radio > RF module (`rfEnable`, `rfType`) |
+| TX / RX frequency, limited to the module's band | Same, range follows the module type (`rfFreqTX`, `rfFreqRX`) |
+| TX / RX CTCSS | Same (`rfToneTX`, `rfToneRX`) |
+| Narrow / wide, TX power, volume 1-8, squelch 0-8 | Same (`rfBand`, `rfPwr`, `rfVolume`, `rfSql`) |
+| Modem type (9600 only on ESP32-S3) | Radio > AFSK / TNC (`rfModem`, list from the firmware) |
+| FX.25 mode, de-emphasis, TX time slot, preamble 100-1000 ms | Same (`fx25Mode`, `audioLPF`, `txTimeSlot`, `rfPreamble`) |
+
+### iGate (old `/igate`)
+
+| Old item | New location / key |
+| --- | --- |
+| Enable, callsign, SSID, symbol (with picker), item/object name, path | iGate > Station |
+| Server host, port, filter | iGate > APRS-IS server |
+| Comment, status text and interval | iGate > Text |
+| RF2INET, INET2RF, time stamp | iGate > Gateway (`igateTime` is now saved; before it was lost on reboot) |
+| RF2INET and INET2RF type filters (form "IGATE Filter") | iGate > Gateway (`rf2inetFilter`, `inet2rfFiltger`) |
+| Beacon, interval, fixed/GPS location, send to RF / Internet, lat, lon, alt | iGate > Position |
+| PHG text and calculator | iGate > PHG (same formula) |
+| Telemetry interval and 5 channels (sensor, name, unit, precision, offset, EQNS a/b/c) | iGate > Telemetry (precision and offset still fill b and c) |
+
+### Digipeater (old `/digi`)
+
+| Old item | New location / key |
+| --- | --- |
+| Enable, auto enable when APRS-IS is down, callsign, SSID, symbol, path | Digipeater > Station |
+| Repeat delay, repeat type filter | Digipeater > Repeating |
+| Comment, status text and interval | Digipeater > Text |
+| Beacon, interval, location, send to RF / Internet, lat, lon, alt, time stamp | Digipeater > Position |
+| PHG, telemetry | Digipeater > PHG, Telemetry |
+
+### Tracker (old `/tracker`)
+
+| Old item | New location / key |
+| --- | --- |
+| Enable, callsign, SSID, symbol, item/object name, path | Tracker > Station |
+| Comment, status text and interval | Tracker > Text |
+| Interval, location, send to RF / Internet, lat, lon, alt, time stamp, compressed, Mic-E type, options (telemetry, altitude, audio request) | Tracker > Position |
+| Smart beacon enable, moving / stopped symbols, high / low speed, slow / max / min interval, min angle | Tracker > Smart beacon |
+| Telemetry | Tracker > Telemetry |
+
+### WiFi (old `/wireless`)
+
+| Old item | New location / key |
+| --- | --- |
+| Access point enable, SSID, password | WiFi > Access point (bit 1 of `WiFiMode`) |
+| Client enable, WiFi TX power | WiFi > Client (bit 2 of `WiFiMode`, `WiFiPwr`) |
+| 5 networks: enable, SSID, password | WiFi > Client (`WiFiSTA`) |
+| Bluetooth: enable, name, PIN, mode, UUIDs (not on classic ESP32) | WiFi > Bluetooth (builds with Bluetooth only) |
+
+The old WiFi page sent the stored passwords to the browser in the page source; the new one never does.
+The page refuses to save with both access point and client disabled, and an access point password
+shorter than 8 characters.
+
+### Removed with this stage
+
+`/radio`, `/igate`, `/digi`, `/tracker`, `/wireless` and the `/symbol` picker popup (about 3,650 lines).
+The classic shell sends those tabs to the new pages.
+
+## Stage 4 and later
+
+Weather, Telemetry, Sensors, Messages, MQTT, VPN, Modules, System, Files, About. A table like the ones
+above is added for each page when it is migrated.

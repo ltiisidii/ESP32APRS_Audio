@@ -4,7 +4,10 @@
  GET  /, /app.css, /app.js  embedded files (gzip, ETag, 304 when unchanged)
  GET  /api/info             live status (dashboard)
  GET  /api/config           whole configuration, secrets replaced by CFG_SECRET_MASK
- POST /api/config           JSON object with the keys to change; saves and asks for a restart
+ GET  /api/meta             fixed lists for the forms (module types, CTCSS, modems)
+ POST /api/config           JSON object with the keys to change; saves, applies what can be applied
+                            live (RF module, modem, WiFi power, beacon timers) and reports if a
+                            restart is needed (WiFi mode/networks, Bluetooth)
  POST /api/reboot           restart in ~1 s
  Everything requires the web login (config.http_username / http_password).
 */
@@ -16,6 +19,7 @@
 #include "web_assets.h"
 #include "millis64.h"
 #include "wireguard_vpn.h"
+#include <AFSK.h>
 #include <ESPCPUTemp.h>
 #ifdef PPPOS
 #include <PPP.h>
@@ -28,6 +32,7 @@ extern PubSubClient clientMQTT;
 #define API_MAX_BODY 16384
 
 extern bool VBat_Flag;
+extern bool initInterval;
 
 
 
@@ -136,6 +141,8 @@ static void apiInfo(AsyncWebServerRequest *request)
         r["txFreq"] = serialized(String(config.freq_tx, 4));
         r["rxFreq"] = serialized(String(config.freq_rx, 4));
         r["power"] = config.rf_power ? "HIGH" : "LOW";
+        if (RF_VERSION.length())
+            r["version"] = RF_VERSION; // answer of the module to AT+VERSION at boot: proves the UART link works
     }
     r["modem"] = config.modem_type < 4 ? MODEM_TYPE[config.modem_type] : "?";
     r["fx25"] = config.fx25_mode < 3 ? FX25_MODE[config.fx25_mode] : "?";
@@ -195,6 +202,48 @@ static void apiBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, s
         memcpy(buf + index, data, len);
 }
 
+// What a configuration change needs, so the API applies it the same way the old pages did
+struct ApplyPlan
+{
+    bool rfModule; // RF module settings: re-program the module (old Radio page)
+    bool modem;    // AFSK/TNC settings: re-init the modem (old TNC form)
+    bool txPower;  // WiFi TX power: set at once (old WiFi page)
+    bool aprsIs;   // APRS-IS login data: drop the connection so it logs in again (old iGate page)
+    bool restart;  // WiFi mode/AP/networks and Bluetooth are only read at boot
+};
+
+static ApplyPlan planChanges(const Configuration &o, const Configuration &n)
+{
+    ApplyPlan p = {};
+    p.rfModule = o.rf_en != n.rf_en || o.rf_type != n.rf_type || o.freq_tx != n.freq_tx || o.freq_rx != n.freq_rx ||
+                 o.offset_tx != n.offset_tx || o.offset_rx != n.offset_rx || o.tone_tx != n.tone_tx ||
+                 o.tone_rx != n.tone_rx || o.band != n.band || o.rf_power != n.rf_power || o.volume != n.volume ||
+                 o.sql_level != n.sql_level;
+    p.modem = o.modem_type != n.modem_type || o.audio_lpf != n.audio_lpf || o.tx_timeslot != n.tx_timeslot ||
+              o.preamble != n.preamble || o.fx25_mode != n.fx25_mode;
+    p.txPower = o.wifi_power != n.wifi_power;
+    p.aprsIs = o.igate_en != n.igate_en || o.aprs_ssid != n.aprs_ssid || o.aprs_port != n.aprs_port ||
+               strcmp(o.aprs_mycall, n.aprs_mycall) || strcmp(o.aprs_host, n.aprs_host) || strcmp(o.aprs_filter, n.aprs_filter);
+    p.restart = o.wifi_mode != n.wifi_mode || o.wifi_ap_ch != n.wifi_ap_ch ||
+                strcmp(o.wifi_ap_ssid, n.wifi_ap_ssid) || strcmp(o.wifi_ap_pass, n.wifi_ap_pass) ||
+                memcmp(o.wifi_sta, n.wifi_sta, sizeof(o.wifi_sta)) ||
+                memcmp(&o.bt_slave, &n.bt_slave, (const char *)&o.bt_power - (const char *)&o.bt_slave + sizeof(o.bt_power));
+    return p;
+}
+
+// Runs after the HTTP answer has left: re-programming the RF module talks to it over UART for a while
+static void applyTask(void *arg)
+{
+    ApplyPlan *p = (ApplyPlan *)arg;
+    vTaskDelay(pdMS_TO_TICKS(300));
+    if (p->rfModule)
+        RF_MODULE(false);
+    if (p->modem)
+        afskSetModem(config.modem_type, config.audio_lpf, config.tx_timeslot, config.preamble * 100, config.fx25_mode);
+    delete p;
+    vTaskDelete(NULL);
+}
+
 static void apiConfigPost(AsyncWebServerRequest *request)
 {
     if (!authOk(request))
@@ -211,18 +260,109 @@ static void apiConfigPost(AsyncWebServerRequest *request)
         request->send(400, "application/json", "{\"ok\":false,\"error\":\"bad json\"}");
         return;
     }
+    Configuration *before = (Configuration *)malloc(sizeof(Configuration));
+    if (!before)
+    {
+        request->send(503, "application/json", "{\"ok\":false,\"error\":\"out of memory\"}");
+        return;
+    }
+    memcpy(before, &config, sizeof(Configuration));
     int n = configApplyPatch(config, patch);
+    if (n == -2)
+    {
+        free(before);
+        request->send(503, "application/json", "{\"ok\":false,\"error\":\"out of memory\"}");
+        return;
+    }
     if (n < 0)
     {
+        free(before);
         request->send(400, "application/json", "{\"ok\":false,\"error\":\"expected an object\"}");
         return;
     }
-    bool saved = n == 0 || saveConfiguration("/default.cfg", config);
+    for (char *call : {config.aprs_mycall, config.digi_mycall, config.trk_mycall})
+        for (char *c = call; *c; c++)
+            *c = toupper((unsigned char)*c); // callsigns are upper case (as the old pages stored them)
+    ApplyPlan plan = planChanges(*before, config);
+    bool changed = memcmp(before, &config, sizeof(Configuration)) != 0;
+    free(before);
+    bool saved = !changed || saveConfiguration("/default.cfg", config);
+    if (changed)
+    {
+        initInterval = true; // restart the beacon timers with the new settings (old iGate/Digi/Tracker pages)
+        if (plan.txPower)
+            WiFi.setTxPower((wifi_power_t)config.wifi_power);
+        if (plan.aprsIs)
+            aprsIsStop();
+        if (plan.rfModule || plan.modem)
+        {
+            ApplyPlan *p = new ApplyPlan(plan);
+            if (xTaskCreate(applyTask, "cfgApply", 4096, p, 1, NULL) != pdPASS)
+                delete p;
+        }
+    }
     JsonDocument doc;
     doc["ok"] = saved;
-    doc["applied"] = n;
-    doc["restart"] = n > 0;
+    doc["changed"] = changed;
+    doc["restart"] = plan.restart;
     sendJson(request, doc, saved ? 200 : 500);
+}
+
+// Fixed lists the forms need, taken from the firmware tables so the browser never holds a stale copy
+static void apiMeta(AsyncWebServerRequest *request)
+{
+    if (!authOk(request))
+        return;
+    JsonDocument doc;
+    JsonArray a = doc["rfTypes"].to<JsonArray>();
+    for (const auto &t : RF_TYPE)
+        a.add(t);
+    a = doc["ctcss"].to<JsonArray>();
+    for (float f : ctcss)
+        a.add(serialized(String(f, 1)));
+    a = doc["modems"].to<JsonArray>();
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+    const int modems = 4; // 9600 G3RUH needs the S3
+#else
+    const int modems = 3;
+#endif
+    for (int i = 0; i < modems; i++)
+        a.add(MODEM_TYPE[i]);
+    a = doc["fx25"].to<JsonArray>();
+    for (const auto &t : FX25_MODE)
+        a.add(t);
+    a = doc["paths"].to<JsonArray>(); // index = config value; 13..16 are the user defined paths
+    for (int i = 0; i < PATH_LEN; i++)
+    {
+        if (i >= 13 && i <= 16 && config.path[i - 13][0])
+            a.add(String(PATH_NAME[i]) + " (" + config.path[i - 13] + ")");
+        else
+            a.add(PATH_NAME[i]);
+    }
+    a = doc["wifiPwr"].to<JsonArray>(); // [config value, dBm]
+    for (const auto &w : wifiPwr)
+    {
+        JsonArray e = a.add<JsonArray>();
+        e.add((int)w[0]);
+        e.add(w[1]);
+    }
+    a = doc["micE"].to<JsonArray>();
+    for (const auto &t : MIC_E_MSG)
+        a.add(t);
+    JsonObject f = doc["features"].to<JsonObject>();
+#ifdef BLUETOOTH
+    f["bt"] = true;
+#if !defined(CONFIG_IDF_TARGET_ESP32)
+    f["btUuid"] = true; // the old page showed the UUIDs on every chip but the classic ESP32
+#endif
+#endif
+#ifdef MQTT
+    f["mqtt"] = true;
+#endif
+#ifdef PPPOS
+    f["ppp"] = true;
+#endif
+    sendJson(request, doc);
 }
 
 static void rebootTask(void *)
@@ -248,6 +388,7 @@ void webApiRegister(AsyncWebServer &server)
                   { sendAsset(request, *a); });
     }
     server.on("/api/info", HTTP_GET, apiInfo);
+    server.on("/api/meta", HTTP_GET, apiMeta);
     server.on("/api/config", HTTP_GET, apiConfigGet);
     server.on("/api/config", HTTP_POST, apiConfigPost, NULL, apiBody);
     server.on("/api/reboot", HTTP_POST, apiReboot);

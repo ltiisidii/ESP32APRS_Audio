@@ -517,6 +517,6 @@ void configFromJson(JsonDocument &doc, Configuration &config);
 void configMaskSecrets(JsonDocument &doc);
 // Applies a partial JSON (same keys as /default.cfg) to cfg. Unknown keys and wrong types are
 // ignored; masked secrets keep their current value. Returns keys applied, -1 if not an object.
-int configApplyPatch(Configuration &cfg, JsonDocument &patch);
+int configApplyPatch(Configuration &cfg, JsonDocument &patch); // keys applied; -1 not an object, -2 out of memory
 
 #endif

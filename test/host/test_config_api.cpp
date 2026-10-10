@@ -18,6 +18,7 @@ static Configuration sample()
     c.aprs_port = 14580;
     c.timeZone = -3;
     c.igate_en = false;
+    c.igate_timestamp = true;
     return c;
 }
 
@@ -32,6 +33,7 @@ TEST(config_json_roundtrip)
     CHECK_EQ_STR(b.wifi_sta[0].wifi_pass, "homepass");
     CHECK_EQ_INT(b.aprs_port, 14580);
     CHECK(b.timeZone == -3);
+    CHECK(b.igate_timestamp); // iGate time stamp switch survives a save/load
 }
 
 TEST(config_api_masks_every_secret)
