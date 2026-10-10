@@ -154,7 +154,13 @@ async function dashboard(main) {
     const i = await api('/api/info');
     const w = i.wifi, s = i.stats, r = i.radio, n = i.net, g = i.gps;
     if (i.tz !== tz) { tz = i.tz; drawLH(); }
-    $('#call').textContent = i.callsign + (i.ssid ? '-' + i.ssid : '');
+    // Header: the callsign(s) actually in use, grouped (iGate and Digi often share one)
+    const groups = {};
+    (i.idents || []).forEach((d) => { (groups[d.call] = groups[d.call] || { set: d.set, roles: [] }).roles.push(d.role); });
+    const parts = Object.entries(groups).map(([call, g]) => g.set
+      ? '<b>' + esc(call) + '</b> <span class="muted">' + g.roles.join('+') + '</span>'
+      : '<span class="bad" title="Set the callsign on the ' + g.roles.join('/') + ' page">' + esc(call) + ' ' + g.roles.join('+') + ': callsign not set</span>');
+    $('#call').innerHTML = parts.length ? parts.join(' &middot; ') : '<span class="warn">no mode enabled</span>';
     const tile = (label, value, cls) => '<div class="tile"><span>' + label + '</span><b' + (cls ? ' class="' + cls + '"' : '') + '>' + value + '</b></div>';
     const heapPct = Math.round((100 * i.heap) / i.heapSize);
     $('#strip').innerHTML =
@@ -181,10 +187,11 @@ async function dashboard(main) {
         ['Drop / error', s.drop + ' / ' + s.error],
       ])) +
       card('Radio', rows([
-        r.rf && ['Freq TX', r.txFreq + ' MHz'],
-        r.rf && ['Freq RX', r.rxFreq + ' MHz'],
+        r.rf && ['Freq TX', Number(r.txFreq).toFixed(3) + ' MHz'],
+        r.rf && ['Freq RX', Number(r.rxFreq).toFixed(3) + ' MHz'],
         r.rf && ['TX power', r.power],
-        r.rf && ['Module', r.version ? '<span class="ok">' + esc(r.version) + '</span>' : '<span class="warn">no answer</span>'],
+        r.rssi !== undefined && ['RSSI', r.rssi + ' <span class="muted">(raw, noise floor when idle)</span>'],
+        r.rf && ['Module', r.version ? '<span class="ok">' + esc(String(r.version).replace(/^\+?VERSION:/i, '')) + '</span>' : '<span class="warn">no answer</span>'],
         ['Modem', esc(r.modem)],
         ['FX.25', esc(r.fx25)],
       ])) +

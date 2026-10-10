@@ -273,6 +273,8 @@ float snr = 0;
 float freqErr = 0;
 
 extern volatile int8_t adcEn;
+extern volatile bool adcPaused;
+extern volatile uint32_t adcPausedSince;
 extern volatile int8_t dacEn;
 extern volatile bool pttOff;
 extern volatile uint32_t adcIsrCount;
@@ -333,6 +335,12 @@ RTC_DATA_ATTR uint32_t COUNTER1_RAW;
 extern RTC_DATA_ATTR uint8_t digiCount;
 
 String RF_VERSION;
+
+// The SA868 UART is shared by RF_MODULE (boot, saving from the web) and the RSSI reader: one lock for both,
+// so a query never lands in the middle of a reconfiguration.
+static SemaphoreHandle_t rfUartLock = xSemaphoreCreateMutex();
+volatile int rfRssi = -1; // last RSSI answer of the module (raw 0..255), -1 = not read
+const char *volatile rfRssiState = "not started"; // diagnostics: what the last attempt did
 
 Configuration config;
 
@@ -3144,25 +3152,31 @@ bool SA868_waitResponse(String &data, String rsp, uint32_t timeout)
     return false;
 }
 
+String rfRssiRaw; // last raw answer to the RSSI query (diagnostics on the web)
+
+// Signal level from the module, raw 0..255; 0 when it does not answer. Different SA868/SA818 firmwares
+// answer "AT+RSSI?" or "RSSI?" with "RSSI=nn" or "+RSSI:nn", so try both and take the first number.
 int SA868_getRSSI()
 {
-    String data;
-    int rssi;
-
-    // Serial.printf("AT+RSSI?\r\n");
-    SerialRF.printf("AT+RSSI?\r\n");
-    if (SA868_waitResponse(data, "\r\n", 1000))
+    static const char *const CMDS[] = {"AT+RSSI?\r\n", "RSSI?\r\n"};
+    for (const char *cmd : CMDS)
     {
-        // Serial.println(INFO + data);
-        String rssi = data.substring(data.indexOf("RSSI=") + strlen("RSSI="), data.indexOf("\r\n"));
-        rssi = rssi.toInt();
-        return rssi.toInt();
+        while (SerialRF.available() > 0) // drop anything left over (e.g. an unsolicited line)
+            SerialRF.read();
+        SerialRF.print(cmd);
+        String data;
+        if (!SA868_waitResponse(data, "\r\n", 500))
+            continue;
+        rfRssiRaw = data.substring(0, 40);
+        rfRssiRaw.trim();
+        int k = data.indexOf("RSSI");
+        if (k < 0)
+            continue;
+        for (int i = k + 4; i < (int)data.length(); i++)
+            if (isDigit(data[i]))
+                return data.substring(i).toInt();
     }
-    else
-    {
-        // timeout or error
-        return 0;
-    }
+    return 0;
 }
 
 String SA868_getVERSION()
@@ -3255,7 +3269,54 @@ String ctcssToHex(unsigned int decValue, int section)
     }
 }
 
+static void RF_MODULE_locked(bool boot);
 void RF_MODULE(bool boot)
+{
+    xSemaphoreTake(rfUartLock, portMAX_DELAY);
+    RF_MODULE_locked(boot);
+    xSemaphoreGive(rfUartLock);
+}
+
+// Every 5 s, at low priority, when the module is an SA868 and is not transmitting. It never waits for the
+// lock: if the module is being reconfigured, that reading is skipped. The answer comes over the UART, apart
+// from the receive audio path (module speaker output -> ADC), so decoding is not touched.
+static void rfRssiTask(void *)
+{
+    for (;;)
+    {
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        bool sa868 = config.rf_type == RF_SA868_VHF || config.rf_type == RF_SA868_UHF || config.rf_type == RF_SA868_350;
+        if (!config.rf_en || !config.rf_rssi_poll || !sa868)
+        {
+            rfRssi = -1;
+            rfRssiState = "off";
+            continue;
+        }
+        if (getTransmit())
+        {
+            rfRssiState = "skipped: transmitting";
+            continue;
+        }
+        if (xSemaphoreTake(rfUartLock, 0) != pdTRUE)
+        {
+            rfRssiState = "skipped: module busy";
+            continue;
+        }
+        int v = SA868_getRSSI();
+        xSemaphoreGive(rfUartLock);
+        rfRssi = v > 0 ? v : -1;
+        rfRssiState = v > 0 ? "ok" : "no answer";
+    }
+}
+
+void rfRssiStart()
+{
+    static bool started = false;
+    if (!started)
+        started = xTaskCreate(rfRssiTask, "rfRssi", 3072, nullptr, 1, nullptr) == pdPASS;
+}
+
+static void RF_MODULE_locked(bool boot)
 {
     String data;
     if (config.rf_en == false)
@@ -3723,7 +3784,7 @@ void setup()
         display.setCursor(60, 40);
         display.printf("FW Ver %s%s", VERSION, VERSION_BUILD);
         display.setCursor(65, 5);
-        display.print("Copy@2022");
+        display.print("(c)2022");
         display.display();
         LED_Status(255, 0, 0);
         delay(1000);
@@ -3783,7 +3844,7 @@ void setup()
         display.setCursor(60, 40);
         display.printf("FW Ver %s%s", VERSION, VERSION_BUILD);
         display.setCursor(60, 55);
-        display.print("Copy@2023");
+        display.print("(c)2023");
         display.display();
 
         delay(1000);
@@ -3916,6 +3977,7 @@ void setup()
 
     if (config.rf_en)
         RF_MODULE(true);
+    rfRssiStart(); // always: the task itself checks rf_en / module type (noise floor for the web)
     log_d("Free heap: %d", ESP.getHeapSize());
 
 #ifdef OLED
@@ -6676,11 +6738,14 @@ void taskAPRS(void *pvParameters)
         if (adcEn == 1)
         {
              AFSK_TimerEnable(true);
+             adcPaused = false;
              adcEn = 0;
         }
         else if (adcEn == -1)
         {
              AFSK_TimerEnable(false);
+             adcPausedSince = millis();
+             adcPaused = true; // deliberate pause (OTA, saving): the supervisor allows it for a while
              adcEn = 0;
         }
 
@@ -9996,9 +10061,9 @@ void dispWindow(String line, uint8_t mode, bool filter)
                     //  display.drawFastVLine(46, 58, 5, WHITE);
                     //  display.setCursor(4, 55);
                     //  if (dist > 999)
-                    //      display.printf("%.fKm", dist);
+                    //      display.printf("%.fkm", dist);
                     //  else
-                    //      display.printf("%.1fKm", dist);
+                    //      display.printf("%.1fkm", dist);
                 }
                 // else
                 // {
@@ -10068,13 +10133,13 @@ void dispWindow(String line, uint8_t mode, bool filter)
                 // display.drawFastVLine(46, 55, 5, WHITE);
                 // display.setCursor(0, 57);
                 // if (dist > 999)
-                //     display.printf("%.fKm", dist);
+                //     display.printf("%.fkm", dist);
                 // else
-                //     display.printf("%.1fKm", dist);
+                //     display.printf("%.1fkm", dist);
 
                 display.setCursor(0, x += 9);
                 display.print("DX: ");
-                str = String(dist, 5) + "Km";
+                str = String(dist, 5) + "km";
                 l = str.length() * 6;
                 display.setCursor(70 - l, x);
                 display.print(str);
@@ -10545,9 +10610,9 @@ void dispWindow(String line, uint8_t mode, bool filter)
                     display.drawFastVLine(46, 58, 5, WHITE);
                     display.setCursor(4, 55);
                     if (dist > 999)
-                        display.printf("%.fKm", dist);
+                        display.printf("%.fkm", dist);
                     else
-                        display.printf("%.1fKm", dist);
+                        display.printf("%.1fkm", dist);
                 }
                 else
                 {
@@ -10617,9 +10682,9 @@ void dispWindow(String line, uint8_t mode, bool filter)
                 display.drawFastVLine(46, 55, 5, WHITE);
                 display.setCursor(4, 57);
                 if (dist > 999)
-                    display.printf("%.fKm", dist);
+                    display.printf("%.fkm", dist);
                 else
-                    display.printf("%.1fKm", dist);
+                    display.printf("%.1fkm", dist);
                 if (aprs.flags & F_CSRSPD)
                 {
                     display.setCursor(51, x += 9);
@@ -11130,11 +11195,11 @@ void dispWindow(String line, uint8_t mode, bool filter)
                     display.drawFastVLine(56, 68, 5, WHITE);
                     display.setCursor(4, 65);
                     // if (dist > 999)
-                    //     //display.printf("%.fKm", dist);
+                    //     //display.printf("%.fkm", dist);
                     //     display.print(dist,0);
                     // else
                     display.print(dist, 1);
-                    display.print("Km");
+                    display.print("km");
                 }
                 else
                 {
@@ -11212,7 +11277,7 @@ void dispWindow(String line, uint8_t mode, bool filter)
                 //     display.printf("DX:%.1fKm", dist);
                 display.print("DX:");
                 display.print(dist, 1);
-                display.print("Km");
+                display.print("km");
                 display.setTextColor(WHITE);
                 if (aprs.flags & F_CSRSPD)
                 {
@@ -11274,7 +11339,7 @@ void dispWindow(String line, uint8_t mode, bool filter)
                     // display.printf("RNG %dKm\n", aprs.radio_range);
                     display.print("RNG: ");
                     display.print(aprs.radio_range);
-                    display.print("Km");
+                    display.print("km");
                 }
                 /*if (aprs.comment_len > 0) {
                     display.setCursor(0, 56);
@@ -12199,9 +12264,9 @@ void radioDisp()
     // x = str.length() * 6;
     // display.setCursor(126 - x, 18);
     display.setCursor(0, 12);
-    display.printf("%.3f Mhz", config.rf_freq);
+    display.printf("%.3f MHz", config.rf_freq);
     display.setCursor(0, 22);
-    display.printf("BW: %.1fKhz", config.rf_bw);
+    display.printf("BW: %.1fkHz", config.rf_bw);
     if (config.rf_power >= 0)
         str = "Pwr:+" + String(config.rf_power) + " dBm";
     else
@@ -12255,9 +12320,9 @@ void radioDisp()
     display.setCursor(3, 53);
     display.print("Bandwidth:");
     if (!config.band)
-        str = "12.5Khz";
+        str = "12.5kHz";
     else
-        str = "25.0Khz";
+        str = "25.0kHz";
     x = str.length() * 6;
     display.setCursor(126 - x, 53);
     display.print(str);
@@ -12301,7 +12366,7 @@ void radioDisp()
 
     display.setCursor(3, 28);
     display.print("Bandwidth");
-    str = String(config.rf_bw, 2) + " Khz";
+    str = String(config.rf_bw, 2) + " kHz";
     x = str.length() * 6;
     display.setCursor(158 - x, 28);
     display.print(str);

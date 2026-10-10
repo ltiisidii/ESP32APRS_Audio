@@ -31,5 +31,7 @@ static inline bool svStalled(uint32_t now, uint32_t last, uint32_t limitMs)
 
 // Start the supervisor task (call once from setup() after the tasks are created)
 void supervisorStart(void);
+// Why the supervisor restarted the previous run ("" if it did not); for the web status
+const char *supervisorLastRestart(void);
 
 #endif

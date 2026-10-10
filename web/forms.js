@@ -307,6 +307,7 @@ pages.radio = (main) => formPage(main, (cfg, meta) => ({
         { k: 'rfPwr', l: 'TX power', t: 'sel', o: [[true, 'HIGH'], [false, 'LOW']] },
         { k: 'rfVolume', l: 'Volume', t: 'range', min: 1, max: 8 },
         { k: 'rfSql', l: 'Squelch level', t: 'range', min: 0, max: 8 },
+        { k: 'rfRssiPoll', l: 'Read RSSI', t: 'sw', h: 'SA868: reads the signal level every 5 s for the dashboard (noise floor). Turn off to compare decoding without it.' },
       ],
       note: 'Applied at once: the module is re-programmed after saving.',
     },

@@ -111,6 +111,7 @@ typedef struct Config_Struct
 
 	//--RF Module
 	bool rf_en;
+	bool rf_rssi_poll; // read the SA868 RSSI every few seconds (noise floor on the web)
 	uint8_t rf_type;
 	float freq_rx;
 	float freq_tx;

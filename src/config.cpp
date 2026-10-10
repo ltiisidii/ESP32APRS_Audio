@@ -50,6 +50,7 @@ void configToJson(const Configuration &config, JsonDocument &doc)
 
     doc["fx25Mode"] = config.fx25_mode;
     doc["rfEnable"] = config.rf_en;
+    doc["rfRssiPoll"] = config.rf_rssi_poll;
     doc["rfType"] = config.rf_type;
     doc["rfModem"] = config.modem_type;    
     doc["rfPreamble"] = config.preamble;
@@ -622,6 +623,7 @@ void configFromJson(JsonDocument &doc, Configuration &config)
 
     config.fx25_mode = doc["fx25Mode"];
     config.rf_en = doc["rfEnable"];
+    config.rf_rssi_poll = doc["rfRssiPoll"] | true;
     config.rf_type = doc["rfType"];
     config.rf_power = doc["rfPwr"];
     config.modem_type = doc["rfModem"];
