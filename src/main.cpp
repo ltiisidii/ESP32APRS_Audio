@@ -54,6 +54,7 @@
 
 #include "sensor.h"
 #include "supervisor.h"
+#include "objects.h"
 
 // Demodulator task priority. Was 0 (= idle): it only ran when nothing else wanted the CPU and
 // lost packets whenever the web server (async_tcp, prio 10) or the display were busy. It sleeps
@@ -2303,6 +2304,19 @@ config.oled_enable = true;
     config.msg_path = 9;
     sprintf(config.msg_key, "8EC8233E91D59B0164C24E771BA66307");
     sprintf(config.msg_mycall, "NOCALL");
+
+    // APRS objects: all off; when one is turned on, these are the usual values for a fixed object
+    memset(config.obj, 0, sizeof(config.obj));
+    for (int i = 0; i < OBJ_COUNT; i++)
+    {
+        config.obj[i].lat = DEFAULT_LAT;
+        config.obj[i].lon = DEFAULT_LON;
+        strcpy(config.obj[i].symbol, "/r");
+        config.obj[i].interval = 30;
+        config.obj[i].path = 2;
+        config.obj[i].rf = true;
+        config.obj[i].inet = true;
+    }
 
     config.log = 0;
 #ifdef MQTT
@@ -5719,6 +5733,12 @@ void loop()
     }
 #endif
 
+    if (objectsTakeSaveRequest()) // an object expired or started its expiry clock: keep it across reboots
+    {
+        loopStage = "save objects";
+        saveConfiguration("/default.cfg", config);
+    }
+
     // Tick one secound
     loopStage = "tick";
     if (millis64() > timeCheck)
@@ -6909,6 +6929,7 @@ void taskAPRS(void *pvParameters)
             msgInterval = millis64() + config.msg_interval;
             sendAPRSMessageRetry();
         }
+        objectsTick(); // APRS objects (Objects page): start-up decay, interval, kills, expiry
 
 #ifdef BLUETOOTH
 #if !defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32C6)

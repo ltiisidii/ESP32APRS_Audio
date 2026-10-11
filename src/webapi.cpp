@@ -31,6 +31,7 @@
 #include "millis64.h"
 #include "webfeed.h"
 #include "supervisor.h"
+#include "objects.h"
 #include "sensor.h"
 #include "wireguard_vpn.h"
 #include "esp_wifi.h"
@@ -380,6 +381,7 @@ static void apiConfigPost(AsyncWebServerRequest *request)
         config.uart0_enable = false;
     else if (config.ppp_enable && config.ppp_serial == 1)
         config.uart1_enable = false;
+    objectsConfigChanged(*before, config); // limits, and the expiry clock restarts when turned on
     ApplyPlan plan = planChanges(*before, config);
     bool changed = memcmp(before, &config, sizeof(Configuration)) != 0;
     free(before);
@@ -535,6 +537,32 @@ static void apiReboot(AsyncWebServerRequest *request)
 }
 
 // Live sensor readings for the Sensors page (the old page showed them once, at load)
+// GET /api/objects: runtime state of the APRS objects (Objects page)
+static void apiObjects(AsyncWebServerRequest *request)
+{
+    if (!authOk(request))
+        return;
+    JsonDocument doc;
+    objectsStatus(doc.to<JsonArray>());
+    sendJson(request, doc);
+}
+
+// POST /api/objects/kill?i=N (1..5): turns the object off and saves; objects.cpp then sends it as killed
+static void apiObjectKill(AsyncWebServerRequest *request)
+{
+    if (!authOk(request))
+        return;
+    int i = request->hasParam("i") ? request->getParam("i")->value().toInt() - 1 : -1;
+    if (i < 0 || i >= OBJ_COUNT)
+    {
+        request->send(400, "application/json", "{\"ok\":false,\"error\":\"bad object\"}");
+        return;
+    }
+    config.obj[i].enable = false;
+    bool saved = saveConfiguration("/default.cfg", config);
+    request->send(saved ? 200 : 500, "application/json", saved ? "{\"ok\":true}" : "{\"ok\":false,\"error\":\"save failed\"}");
+}
+
 static void apiSensors(AsyncWebServerRequest *request)
 {
     if (!authOk(request))
@@ -910,6 +938,8 @@ void webApiRegister(AsyncWebServer &server)
     server.on("/api/monitor", HTTP_GET, apiMonitor);
     server.on("/api/gnss", HTTP_GET, apiGnss);
     server.on("/api/about", HTTP_GET, apiAbout);
+    server.on("/api/objects/kill", HTTP_POST, apiObjectKill);
+    server.on("/api/objects", HTTP_GET, apiObjects);
     server.on("/api/sensors", HTTP_GET, apiSensors);
     server.on("/api/time", HTTP_POST, apiTime, NULL, apiBody);
     server.on("/api/factory", HTTP_POST, apiFactory);

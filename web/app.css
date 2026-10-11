@@ -166,3 +166,4 @@ td.acts{text-align:right;white-space:nowrap}
   .tbody{min-height:40vh}
   .frow{grid-template-columns:1fr;gap:4px}
 }
+.mono{font-family:ui-monospace,Consolas,monospace;word-break:break-all}

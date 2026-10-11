@@ -525,6 +525,28 @@ void configToJson(const Configuration &config, JsonDocument &doc)
     doc["msgRetry"] = config.msg_retry;
     doc["msgInterval"] = config.msg_interval;
 
+    // APRS objects: one array per field, like the other multi-value settings
+    JsonArray oEn = doc["objEn"].to<JsonArray>(), oName = doc["objName"].to<JsonArray>(), oLat = doc["objLat"].to<JsonArray>(),
+              oLon = doc["objLon"].to<JsonArray>(), oSym = doc["objSym"].to<JsonArray>(), oCmt = doc["objCmt"].to<JsonArray>(),
+              oInv = doc["objInv"].to<JsonArray>(), oPath = doc["objPath"].to<JsonArray>(), oRF = doc["objRF"].to<JsonArray>(),
+              oIS = doc["objIS"].to<JsonArray>(), oExp = doc["objExp"].to<JsonArray>(), oStart = doc["objStart"].to<JsonArray>();
+    for (int i = 0; i < OBJ_COUNT; i++)
+    {
+        const aprsObject &o = config.obj[i];
+        oEn.add(o.enable);
+        oName.add(o.name);
+        oLat.add(o.lat);
+        oLon.add(o.lon);
+        oSym.add(o.symbol);
+        oCmt.add(o.comment);
+        oInv.add(o.interval);
+        oPath.add(o.path);
+        oRF.add(o.rf);
+        oIS.add(o.inet);
+        oExp.add(o.expire);
+        oStart.add(o.start);
+    }
+
 }
 
 bool saveConfiguration(const char *filename, const Configuration &config)
@@ -1073,6 +1095,24 @@ void configFromJson(JsonDocument &doc, Configuration &config)
         config.msg_interval = doc["msgInterval"];
         strlcpy(config.msg_key, doc["msgAESKey"] | "", sizeof(config.msg_key));
         strlcpy(config.msg_mycall, doc["msgMycall"] | "", sizeof(config.msg_mycall));
+    }
+
+    // APRS objects (missing in older files: all off)
+    for (int i = 0; i < OBJ_COUNT; i++)
+    {
+        aprsObject &o = config.obj[i];
+        o.enable = doc["objEn"][i] | false;
+        strlcpy(o.name, doc["objName"][i] | "", sizeof(o.name));
+        o.lat = doc["objLat"][i] | (float)DEFAULT_LAT;
+        o.lon = doc["objLon"][i] | (float)DEFAULT_LON;
+        strlcpy(o.symbol, doc["objSym"][i] | "/r", sizeof(o.symbol));
+        strlcpy(o.comment, doc["objCmt"][i] | "", sizeof(o.comment));
+        o.interval = doc["objInv"][i] | 30;
+        o.path = doc["objPath"][i] | 2;
+        o.rf = doc["objRF"][i] | true;
+        o.inet = doc["objIS"][i] | true;
+        o.expire = doc["objExp"][i] | 0;
+        o.start = doc["objStart"][i] | 0;
     }
 }
 
