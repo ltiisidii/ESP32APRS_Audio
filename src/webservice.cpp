@@ -201,6 +201,8 @@ String lastHeardJson()
 				aprs.dstcall_end = &aprs.data[end_ssid];
 				aprs.srccall_end = &aprs.data[start_dst];
 
+				aprs.comment = NULL; // aprs is static: a packet without a comment must not show the previous one
+				aprs.comment_len = 0;
 				// Serial.println(aprs.info_start);
 				if (aprsParse.parse_aprs(&aprs))
 				{
@@ -348,6 +350,28 @@ String lastHeardJson()
 					else
 					{
 						strcat(html, "\"dx\":\"-\",");
+					}
+					// Comment / data like an SDR decoder shows it: the parsed comment, else the info field (telemetry, status...)
+					{
+						static char cmt[73], cmt_esc[150];
+						const char *c = aprs.comment;
+						size_t n = aprs.comment_len;
+						bool tlm = aprs.info_start && aprs.info_start[0] == 'T' && aprs.info_start[1] == '#'; // telemetry: the values are the data
+						if (c == NULL || n == 0 || tlm)
+						{
+							// the parser cuts its copy (aprs.data) at the commas: take the info field from the raw packet
+							c = strchr(pkgRaw, ':');
+							c = c ? c + 1 : NULL;
+							n = c ? strnlen(c, sizeof(pkgRaw)) : 0;
+						}
+						if (n > sizeof(cmt) - 1)
+							n = sizeof(cmt) - 1;
+						memcpy(cmt, c ? c : "", n);
+						cmt[n] = 0;
+						jsonEscapeCopy(cmt_esc, sizeof(cmt_esc), cmt);
+						snprintf(temp_html, sizeof(temp_html), "\"comment\":\"%s\",", cmt_esc);
+						if (strlen(html) + strlen(temp_html) + 400 < 16384)
+							strcat(html, temp_html);
 					}
 					snprintf(temp_html, sizeof(temp_html), "\"packet\":\"%d\",", packet);
 					strcat(html, temp_html);

@@ -64,6 +64,8 @@ const rssiText = (v) => {
   return v + ' <span class="muted">raw &middot; ' + (rssiSeen.length < 3 || over < 10 ? 'noise floor' : '<span class="ok">signal</span> +' + over + ' over noise (' + floor + ')') + '</span>';
 };
 const dBV = (mV) => (mV > 0 ? 20 * Math.log10(mV / 1000) : -Infinity);
+// Same bands as the RX audio level meter: < -30 too low, -30..-20 low, -20..-10 good, > -10 too high (clipping risk)
+const vuClass = (db) => (!isFinite(db) ? 'muted' : db > -10 ? 'vu-hi' : db > -20 ? 'vu-ok' : db > -30 ? 'vu-mid' : 'vu-lo');
 // Repeats fn every ms (after each run ends) until the returned stop function is called. Live data is
 // pulled this way: the firmware never pushes into the web server from its other tasks (see webfeed.h).
 function poller(fn, ms, onState) {
@@ -97,14 +99,20 @@ function makeLog(el, max) {
 }
 
 // ---- Dashboard: everything the old Dashboard tab showed (sysinfo, sidebar, radio, WiFi, BT, last heard) ----
+// Callsign (or object name) as a link to its aprs.fi page; objects come as "NAME(SENDER)"
+const aprsLink = (c) => {
+  const name = String(c || '').replace(/\(.*\)$/, '').trim();
+  return name ? '<a href="https://aprs.fi/info/?call=' + encodeURIComponent(name) + '" target="_blank" rel="noopener">' + esc(c) + '</a>' : esc(c);
+};
 const LH_COLS = [
-  ['time', 'Time'], ['icon', ''], ['callsign', 'Callsign'], ['path', 'Via last path'],
+  ['time', 'Time'], ['icon', ''], ['callsign', 'Callsign'], ['path', 'Via last path'], ['comment', 'Comment / data'],
   ['dx', 'DX'], ['packet', 'Packets'], ['audio', 'Audio'],
 ];
 const LH_SORT = {
   time: (r) => { const m = /^(\d+) (\d+):(\d+):(\d+)$/.exec(r.time); return m ? +m[1] * 86400 + +m[2] * 3600 + +m[3] * 60 + +m[4] : 0; },
   callsign: (r) => r.callsign,
   path: (r) => r.path,
+  comment: (r) => r.comment || '',
   dx: (r) => { const v = parseFloat(r.dx); return isNaN(v) ? null : v; },
   packet: (r) => parseInt(r.packet, 10) || 0,
   audio: (r) => { const v = parseFloat(r.audio); return isNaN(v) ? null : v; },
@@ -136,12 +144,12 @@ async function dashboard(main) {
     }).join('');
     const body = sorted.map((r) => {
       const icon = /^(\d{2,3}-[12]|dot)\.png$/.test(r.icon) ? '<img src="' + ICONS + r.icon + '" alt="" width="20" height="20" loading="lazy">' : '';
-      const audio = r.audio && r.audio !== '-' ? '<span class="ok">' + esc(r.audio) + ' dBV</span>' : '-';
-      return '<tr><td>' + esc(r.time) + '</td><td class="ic">' + icon + '</td><td><b>' + esc(r.callsign) + '</b></td><td class="path">' +
-        esc(r.path) + '</td><td>' + esc(r.dx || '-') + '</td><td>' + esc(r.packet) + '</td><td>' + audio + '</td></tr>';
+      const audio = r.audio && r.audio !== '-' ? '<span class="' + vuClass(parseFloat(r.audio)) + '">' + esc(r.audio) + ' dBV</span>' : '-';
+      return '<tr><td>' + esc(r.time) + '</td><td class="ic">' + icon + '</td><td><b>' + aprsLink(r.callsign) + '</b></td><td class="path">' +
+        esc(r.path) + '</td><td class="cmt" title="' + esc(r.comment || '') + '">' + esc(r.comment || '') + '</td><td>' + esc(r.dx || '-') + '</td><td>' + esc(r.packet) + '</td><td>' + audio + '</td></tr>';
     }).join('');
     $('#lh').innerHTML = '<thead><tr>' + head + '</tr></thead><tbody>' +
-      (body || '<tr><td colspan="7" class="muted">No stations heard yet</td></tr>') + '</tbody>';
+      (body || '<tr><td colspan="8" class="muted">No stations heard yet</td></tr>') + '</tbody>';
   };
   $('#lh').onclick = (e) => {
     const k = e.target.closest('th')?.dataset.k;
@@ -259,6 +267,7 @@ function terminal(main) {
       const shown = Math.max(-40, Math.min(0, db));
       $('#vuMark').style.left = ((shown + 40) * 2.5) + '%';
       $('#vuText').textContent = (mV / 1000).toFixed(3) + ' Vrms, ' + (isFinite(db) ? db.toFixed(1) : '-') + ' dBV';
+      $('#vuText').className = vuClass(db);
       log.add((m.t > 1600000000 ? new Date(m.t * 1000).toLocaleString() : 'clock not set yet') + ' [' + (mV / 1000).toFixed(3) + ' Vrms, ' + (isFinite(db) ? db.toFixed(1) : '-') + ' dBV]\n' + m.raw);
     });
   }, 1000, (ok) => { $('#wsState').textContent = ok ? '(live)' : '(no answer, retrying...)'; });
