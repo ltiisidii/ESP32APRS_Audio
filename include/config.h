@@ -76,6 +76,24 @@ typedef struct wifi_struct
 	char wifi_pass[63];
 } wifiSTA;
 
+// APRS object of this station (Objects page); objects.cpp sends them
+#define OBJ_COUNT 5
+typedef struct
+{
+	bool enable;
+	char name[10];     // 3..9 printable characters
+	float lat;
+	float lon;
+	char symbol[3];    // table + code
+	char comment[44];  // up to 43 characters
+	uint16_t interval; // minutes between sends once the start-up decay is over (10..120)
+	uint8_t path;      // 0 direct, 1 WIDE1-1, 2 WIDE2-1, 3 WIDE2-2
+	bool rf;
+	bool inet;
+	uint16_t expire;   // hours until it is killed by itself (0 = never)
+	uint32_t start;    // UTC time the expiry counts from (0 = not started yet)
+} aprsObject;
+
 typedef struct Config_Struct
 {
 	float timeZone;
@@ -492,6 +510,7 @@ typedef struct Config_Struct
 	uint8_t msg_retry;
 	uint16_t msg_interval;
 
+	aprsObject obj[OBJ_COUNT];
 } Configuration;
 
 // Factory defaults (region: Argentina). Used by defaultConfig() and as fallbacks

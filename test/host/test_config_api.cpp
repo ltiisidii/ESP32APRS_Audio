@@ -20,6 +20,18 @@ static Configuration sample()
     c.igate_en = false;
     c.igate_timestamp = true;
     strlcpy(c.tlm0_comment, "tlm note", sizeof(c.tlm0_comment));
+    c.obj[2].enable = true;
+    strlcpy(c.obj[2].name, "147.030xx", sizeof(c.obj[2].name));
+    c.obj[2].lat = -41.1440f;
+    c.obj[2].lon = -71.3717f;
+    strlcpy(c.obj[2].symbol, "/r", sizeof(c.obj[2].symbol));
+    strlcpy(c.obj[2].comment, "T088 +060 Cerro Otto", sizeof(c.obj[2].comment));
+    c.obj[2].interval = 20;
+    c.obj[2].path = 3;
+    c.obj[2].rf = true;
+    c.obj[2].inet = false;
+    c.obj[2].expire = 48;
+    c.obj[2].start = 1791600000;
     return c;
 }
 
@@ -36,6 +48,49 @@ TEST(config_json_roundtrip)
     CHECK(b.timeZone == -3);
     CHECK(b.igate_timestamp); // iGate time stamp switch survives a save/load
     CHECK_EQ_STR(b.tlm0_comment, "tlm note"); // system telemetry comment too
+    // APRS objects: every field of every slot survives a save/load
+    CHECK(b.obj[2].enable);
+    CHECK_EQ_STR(b.obj[2].name, "147.030xx");
+    CHECK(b.obj[2].lat > -41.1441f && b.obj[2].lat < -41.1439f);
+    CHECK(b.obj[2].lon > -71.3718f && b.obj[2].lon < -71.3716f);
+    CHECK_EQ_STR(b.obj[2].symbol, "/r");
+    CHECK_EQ_STR(b.obj[2].comment, "T088 +060 Cerro Otto");
+    CHECK_EQ_INT(b.obj[2].interval, 20);
+    CHECK_EQ_INT(b.obj[2].path, 3);
+    CHECK(b.obj[2].rf && !b.obj[2].inet);
+    CHECK_EQ_INT(b.obj[2].expire, 48);
+    CHECK(b.obj[2].start == 1791600000u);
+    CHECK(!b.obj[0].enable);
+}
+
+TEST(config_old_file_has_objects_off)
+{
+    // a configuration saved before objects existed: all off, usual defaults for when one is turned on
+    Configuration b;
+    memset(&b, 0, sizeof(b));
+    JsonDocument doc;
+    deserializeJson(doc, "{\"aprsMycall\":\"LU1ABC\"}");
+    configFromJson(doc, b);
+    for (int i = 0; i < OBJ_COUNT; i++)
+    {
+        CHECK(!b.obj[i].enable);
+        CHECK_EQ_INT(b.obj[i].interval, 30);
+        CHECK_EQ_INT(b.obj[i].path, 2); // WIDE2-1
+        CHECK_EQ_STR(b.obj[i].symbol, "/r");
+    }
+}
+
+TEST(config_api_patch_one_object)
+{
+    // the Objects page sends whole arrays; only the edited slot may change
+    Configuration c = sample();
+    JsonDocument patch;
+    deserializeJson(patch, "{\"objName\":[\"EVENT\",\"\",\"147.030xx\",\"\",\"\"],\"objEn\":[true,false,true,false,false]}");
+    CHECK(configApplyPatch(c, patch) == 2);
+    CHECK(c.obj[0].enable);
+    CHECK_EQ_STR(c.obj[0].name, "EVENT");
+    CHECK_EQ_STR(c.obj[2].name, "147.030xx");
+    CHECK_EQ_STR(c.obj[2].comment, "T088 +060 Cerro Otto"); // untouched fields kept
 }
 
 TEST(config_api_masks_every_secret)
