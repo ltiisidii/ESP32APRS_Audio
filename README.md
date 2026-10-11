@@ -199,7 +199,7 @@ This fork has two levels of testing:
   1200/300/9600 baud, decode rate vs. noise, configuration save with simulated power cuts,
   digipeater path handling. Run them with Docker Desktop:
   ```powershell
-  powershell -File test\hostun.ps1
+  powershell -File test\host\run.ps1
   ```
   The same folder has `wav_decode`, which runs audio recordings (e.g. the WA8LMF TNC Test CD)
   through the firmware's demodulator, and `interop.ps1`, which checks every modem mode (1200, 300,
