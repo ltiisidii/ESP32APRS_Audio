@@ -99,10 +99,16 @@ function makeLog(el, max) {
 }
 
 // ---- Dashboard: everything the old Dashboard tab showed (sysinfo, sidebar, radio, WiFi, BT, last heard) ----
-// Callsign (or object name) as a link to its aprs.fi page; objects come as "NAME(SENDER)"
+// Callsign as a link to its aprs.fi page. Objects/items come as "NAME(SENDER)": both parts link, so the
+// sender is not lost (aprs.fi keys objects by name; the sender is a station of its own).
+const aprsUrl = (c) => 'https://aprs.fi/info/?call=' + encodeURIComponent(c);
+const aprsA = (c, text) => '<a href="' + aprsUrl(c) + '" target="_blank" rel="noopener">' + esc(text) + '</a>';
 const aprsLink = (c) => {
-  const name = String(c || '').replace(/\(.*\)$/, '').trim();
-  return name ? '<a href="https://aprs.fi/info/?call=' + encodeURIComponent(name) + '" target="_blank" rel="noopener">' + esc(c) + '</a>' : esc(c);
+  const s = String(c || '');
+  const m = /^(.*)\(([^()]+)\)$/.exec(s);
+  if (!m) return s.trim() ? aprsA(s.trim(), s) : esc(s);
+  const name = m[1].trim();
+  return (name ? aprsA(name, m[1]) : esc(m[1])) + ' <span class="muted">(' + aprsA(m[2].trim(), m[2]) + ')</span>';
 };
 const LH_COLS = [
   ['time', 'Time'], ['icon', ''], ['callsign', 'Callsign'], ['path', 'Via last path'], ['comment', 'Comment / data'],
