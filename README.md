@@ -5,6 +5,16 @@
 ESP32APRS Audio is a Internet Gateway(IGate)/Digital Repeater(DiGi)/Tracker/Weather(WX)/Telemetry(TLM) with AFSK/GFSK TNC Built in that is implemented for Espressif ESP32 processor.
  
 
+## About this fork
+
+This is a fork of [nakhonthai/ESP32APRS_Audio](https://github.com/nakhonthai/ESP32APRS_Audio) by HS5TQA,
+maintained by Jonatan, LU6EWB. Its goal is a station that can run unattended for years (for example a digipeater
+or iGate on a hilltop), at least as reliable as a dedicated TNC such as the Kantronics KPC-3+.
+
+- **Based on:** upstream firmware V1.8, commit `9a41b72` (2026-07-12).
+- **What changed:** see [Changes in this fork](#changes-in-this-fork) below.
+- The original author's work and credits are kept.
+
 ## Feature
 
 * Supported hardware: ESP32DR Simple,ESP32DR,D.I.Y Other
@@ -42,6 +52,9 @@ ESP32APRS Audio is a Internet Gateway(IGate)/Digital Repeater(DiGi)/Tracker/Weat
 * Analog-digital busy channel detection (data carrier detection)
 * AX.25 coder/decoder
 * FX.25 (AX.25 with error correction) coder/decoder, fully compatible with [Direwolf](https://github.com/wb2osz/direwolf) and [UZ7HO Soundmodem](http://uz7.ho.ua/packetradio.htm)
+* APRS objects: up to 5 objects of the station (repeaters, events, places), with start-up decay and kill (this fork)
+* Web interface rebuilt as a small offline app with a JSON API; works on phones (this fork)
+* Task supervisor: restarts the station if a task, the RX audio or the main loop stops, and shows why (this fork)
 
 ## Hardware screen short
 ![esp32c3aprs_radio](image/ESP32C3APRS_Radio.jpg) ![esp32c3aprs_oled](image/ESP32C3APRS_OLED.jpg)
@@ -58,7 +71,12 @@ ESP32APRS Audio is a Internet Gateway(IGate)/Digital Repeater(DiGi)/Tracker/Weat
 ## ESP32DR_SA868
 Share project [here](https://oshwlab.com/APRSTH/esp32sa818) \
 Schematic [here](doc/ESP32DR_SA868/ESP32DR_SA868_sch.pdf) \
-PCB Gerber [hare](doc/ESP32DR_SA868/ESP32DR_SA868_Gerber.zip)
+PCB Gerber [here](doc/ESP32DR_SA868/ESP32DR_SA868_Gerber.zip)
+
+**RX audio level.** The board has two trimpots: **SPK** (receive audio from the SA868 to the ESP32 ADC) and **MIC**
+(transmit audio, i.e. deviation). Set the receive level with **SPK** only: open *TNC2 terminal* and adjust until
+packets show **-10 to -20 dBV** (green on the meter). Above -10 dBV the ADC clips and packets are lost; the decoder
+needs at least 10 mV. Do not touch **MIC** to fix reception.
 
 ## ESP32DR Simple
 
@@ -168,8 +186,11 @@ for Handheld
 ## ESP32APRS_Audio firmware installation (do it first time, next time via the web browser)
 - 1.Connect the USB cable to the ESP32 Module.
 - 2.Download firmware and open the program ESP32 DOWNLOAD TOOL, set it in the firmware upload program, set the firmware to ESP32_Vxx.bin, location 0x10000 and partitions.bin at 0x8000 and bootloader.bin at 0x1000 and boot.bin at 0xe000, if not loaded, connect GPIO0 cable to GND, press START button finished, press power button or reset (red) again.
-- 3.Then go to WiFi AP SSID: ESP32APRS_Audio and open a browser to the website. http://192.168.4.1 password: aprsthnetwork Can be fixed Or turn on your Wi-Fi router.
-- 4.Push **BOOT** button long >100ms to TX Position and >10Sec to Factory Default
+- 3.Connect to the WiFi access point **ESP32APRS_Audio** (password `esp32aprs`) and open http://192.168.4.1.
+  The web login is `admin` / `admin`. **Change both passwords after the first login** (System and WiFi pages).
+- 4.**BOOT** button: a short press shows the next OLED screen. Holding it more than 2 s does the action of the screen
+  shown (STATISTIC: send the tracker position now; WiFi: WiFi off/on; SYSTEM: power off). Holding it at the end of
+  the 3-second countdown at power-on restores the factory defaults.
 
 ![ESP32Tool](image/ESP32Tool.png)
 
@@ -216,11 +237,48 @@ This fork has two levels of testing:
 
 All 13 PlatformIO environments in `platformio.ini` are expected to build.
 
+## Changes in this fork
+
+Changes made to the original V1.8 firmware (commit `9a41b72`), grouped by topic. Details are in the git history.
+
+**Stability (unattended operation)**
+- Task supervisor: restarts the station when a critical task, the RX audio sampling or the main loop stops, and
+  keeps the reason across the restart (shown on the dashboard).
+- OTA updates are confirmed only after 2 minutes of healthy running; otherwise the previous firmware comes back.
+- Fixed hangs: dead RX after a WiFi reconnect, stuck PTT (PTT time-out), APRS-IS connection that never recovered.
+- Fixed the `millis()` wrap at 49.7 days that flooded beacons and telemetry.
+- Configuration saved atomically with a backup copy: a power cut while saving no longer loses the settings.
+- Data shared between tasks protected; buffers fed from RF and APRS-IS bounded; heap leak in the gateway ping fixed.
+- RX in real time: demodulator priority, larger ADC buffer, no sample overwritten when the buffer is full.
+- Web server hardened: survives bursts of parallel requests and refuses new work when memory is low instead of crashing.
+- ESP32 with the PTT on GPIO32 (ESP32DR SA868): configuring the PTT also turned GPIO0 (BOOT) into an output held
+  low, so the long-press actions fired by themselves and the main loop froze. Fixed.
+
+**Radio and modem**
+- Modem, AX.25 and parser bugs fixed (found with the host tests and static analysis).
+- Digipeater: duplicate suppression, traceable WIDEn-N, clearer PATH list.
+- SA868: every setup command is checked and retried; module RSSI and RX audio level shown on the web.
+- APRS objects (up to 5) on the new Objects page.
+
+**Web interface**
+- New interface (JSON API + small offline app) replacing the old pages and jQuery, with every setting kept.
+- Dashboard with last heard (comment/data column, aprs.fi links, audio level colours), TNC2 terminal with an audio
+  level meter, GPS and messages; a "session expired" notice instead of a surprise login box.
+- OLED: screens rotate by themselves (configurable), showing only the screens that apply to the station.
+
+**Defaults**
+- Thailand-specific defaults replaced by neutral ones (worldwide APRS-IS server, `pool.ntp.org`, generic AP name).
+
+**Testing**
+- Host tests that run the real firmware code on a PC (AddressSanitizer/UBSan), interoperability tests against
+  Dire Wolf in every modem mode, WA8LMF TNC Test CD results and a hardware test plan. All 13 environments build.
+
 ## APRS Server service
 
-- APRS SERVER of T2THAI at [aprs.dprns.com:14580](http://aprs.dprns.com:14501), CBAPRS at [aprs.dprns.com:24580](http://aprs.dprns.com:24501)
-- APRS SERVER of T2THAI ampr host at [aprs.hs5tqa.ampr.org:14580](http://aprs.hs5tqa.ampr.org:14501)
-- APRS MAP SERVICE [http://aprs.dprns.com](http://aprs.dprns.com)
+- Default APRS-IS server: `rotate.aprs2.net:14580` (the worldwide tier-2 network). Any server can be set on the iGate page.
+- The original author also runs APRS servers in Thailand: T2THAI at [aprs.dprns.com:14580](http://aprs.dprns.com:14501),
+  CBAPRS at [aprs.dprns.com:24580](http://aprs.dprns.com:24501), ampr host [aprs.hs5tqa.ampr.org:14580](http://aprs.hs5tqa.ampr.org:14501),
+  map at [aprs.dprns.com](http://aprs.dprns.com).
 
 ## Developer/Support Information
 
@@ -242,14 +300,13 @@ If you want to donate some hardware to facilitate APRS porting and development, 
 <a href="https://www.paypal.me/0hs5tqa0"><img src="https://github.com/nakhonthai/ESP32IGate/raw/master/blue.svg" height="40"></a> 
 
 
-## ESP32 Flash Download Tools
-https://www.espressif.com/en/support/download/other-tools
-
 ## Credits & Reference
+
+- ESP32APRS_Audio original firmware and hardware by HS5TQA (Somkiat Nakhonthai), see above
 
 - ESP32TNC project by amedes [ESP32TNC](https://github.com/amedes/ESP32TNC)
 - APRS Library by markqvist [LibAPRS](https://github.com/markqvist/LibAPRS)
 - vp-digi project by sq8vps [vp-digi](https://github.com/sq8vps/vp-digi)
 
-## HITH
-This project implement by APRS text (TNC2 Raw) only,It not support null string(0x00) in the package.
+## Note
+This project works with APRS text (TNC2 raw) only; it does not support a null byte (0x00) inside a packet.
