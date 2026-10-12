@@ -62,7 +62,19 @@ or iGate on a hilltop), at least as reliable as a dedicated TNC such as the Kant
 ![esp32dr_sa868_pcb](doc/ESP32DR_SA868/ESP32DR_SA868_Block.png)
 
 ## Hardware mod
-![esp32dr_sql](image/ESP32IGate_SQL.jpg) 
+
+**SQL (squelch) pin.** The firmware samples the receive audio only while the radio's squelch is open, read on
+*SQL GPIO* (Modules page, Radio wiring). If the radio's squelch output is **not wired** to the ESP32 (for example
+the ESP32DR Simple circuit), set **SQL GPIO = -1**: the station then listens all the time and finds packets by the
+audio level. With the pin set but not wired, the firmware reads a floating input and may never decode anything.
+
+| Board | SQL GPIO |
+|---|---|
+| ESP32DR Simple (external radio by cable) | `-1` (not wired) |
+| ESP32DR SA868 | `33`, active LOW (the module's AUDIO_ON output) |
+| Other radio with its squelch output wired | the GPIO it is wired to |
+
+![SQL GPIO set to -1 on the Modules page](docs/images/ui-sql-simple.png)
 
 ## Web interface
 
