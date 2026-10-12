@@ -89,7 +89,7 @@ void pushTxDisp(uint8_t ch, const char *name, char *info)
     pkg.tx_ch = ch;
     strcpy(pkg.name, name);
     strcpy(pkg.info, info);
-    queTxDisp.push(&pkg); // ใส่แพ็จเก็จจาก TNC ลงคิวบัพเฟอร์
+    queTxDisp.push(&pkg); // put the packet from the TNC into the queue buffer
 }
 
 #define ROTARY_ENCODER_A_PIN 47
@@ -6814,7 +6814,7 @@ void dispWindow(String line, uint8_t mode, bool filter)
         if (start_val > 3 && start_val < 12)
             line = new_info;
     }
-    start_val = line.indexOf(">", 0); // หาตำแหน่งแรกของ >
+    start_val = line.indexOf(">", 0); // position of the first >
     if (start_val > 3 && start_val < 12)
     {
         // powerWakeup();
@@ -7571,22 +7571,22 @@ void dispWindow(String line, uint8_t mode, bool filter)
 
 String cut_string(String input, String header)
 {
-    if (input.indexOf(header) != -1) // ตรวจสอบว่าใน input มีข้อความเหมือนใน header หรือไม่
+    if (input.indexOf(header) != -1) // does the input contain the header text?
     {
-        int num_get = input.indexOf(header); // หาตำแหน่งของข้อความ get_string ใน input
-        if (num_get != -1)                   // ตรวจสอบว่าตำแหน่งที่ได้ไม่ใช่ -1 (ไม่มีข้อความ get_string ใน input)
+        int num_get = input.indexOf(header); // position of the header text in the input
+        if (num_get != -1)                   // -1 = the header text is not in the input
         {
-            int start_val = input.indexOf(">", num_get) + 1; // หาตำแหน่งแรกของ “
-            int stop_val = input.indexOf(",", start_val);    // หาตำแหน่งสุดท้ายของ “
-            return (input.substring(start_val, stop_val));   // ตัดเอาข้อความระหว่า “แรก และ ”สุดท้าย
+            int start_val = input.indexOf(">", num_get) + 1; // start of the value
+            int stop_val = input.indexOf(",", start_val);    // end of the value
+            return (input.substring(start_val, stop_val));   // the text between start and end
         }
         else
         {
-            return ("NULL"); // Return ข้อความ NULL เมื่อไม่ตรงเงื่อนไข
+            return ("NULL"); // "NULL" when not found
         }
     }
 
-    return ("NULL"); // Return ข้อความ NULL เมื่อไม่ตรงเงื่อนไข
+    return ("NULL"); // "NULL" when not found
 }
 
 #endif // GUI_LCD

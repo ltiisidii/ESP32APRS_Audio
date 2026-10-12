@@ -82,7 +82,7 @@ const char SYSTEM_BITS_NAME[9][20] = {"NONE", "IGATE Mode", "DIGI Mode", "WEATHE
 const char PATH_NAME[PATH_LEN][15] = {"OFF", "DST-TRACE 1", "DST-TRACE 2", "DST-TRACE 3", "DST-TRACE 4", "TRACE1-1", "TRACE2-2", "TRACE3-3", "WIDE1-1","RFONLY","RELAY","GATE","ECHO","UserDefine 1","UserDefine 2","UserDefine 3","UserDefine 4"};
 
 
-// ใช้ตัวแปรโกลบอลในไฟล์ main.cpp
+// global variables from main.cpp
 extern statusType status;
 extern digiTLMType digiTLM;
 extern Configuration config;

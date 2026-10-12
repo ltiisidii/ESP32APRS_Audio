@@ -13,7 +13,7 @@
 #include "lwip/ip_addr.h"
 
 
-//ใช้ตัวแปรโกลบอลในไฟล์ main.cpp
+// global variables from main.cpp
 extern Configuration config;
 
 #ifdef __cplusplus
