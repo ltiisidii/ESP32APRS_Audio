@@ -151,34 +151,34 @@ The ESP32C3APRS Schematic PDF is [here](doc/Schematic_ESPC3_APRS.pdf)
 
 |Reference|Value|Description|
 |---|:---:|---|
-|U1|ESP32 DEVKIT|DOIT ESP32 DEVKIT (โมดูล ESP32)|
-|RP2|1K|VR 3362W (R ปรับค่าเสียงออก)|
-|RP1|10K|VR 3362W (R ปรับค่าเสียงเข้า)|
-|RJ11|RJ11-6P6C|แจ๊คโมดูล RJ11 แบบ 6ขา|
-|R13,R12,R11,R5,R3,R9|1K|R 1K 1/4W (ค่าสี: น้ำตาล ดำ แดง)|
-|R7,R18,R19|100R|R 100R  1/4W (ค่าสี: น้ำตาล ดำ ดำ)|
-|R6,R2,R1|10K|R 10k  1/4W  (ค่าสี: น้ำตาล ดำ ส้ม)|
-|R4|3K|R 3k 1/4W (ค่าสี: ส้ม ดำ แดง)|
-|R10|33K|R 33K 1/4W (ค่าสี: ส้ม ส้ม ส้ม)|
-|Q1|2N3904|ทรานซิสเตอร์ NPN (TO-92)|
-|LED3|LED 3.5mm|สีเหลือง แสดงส่งสัญญาณ TX|
-|LED2|LED 3.5mm|สีเขียว แสดงรับสัญญาณ RX|
-|LED1|LED 3.5mm|สีแดง แสดงไฟเข้าทำงาน|
+|U1|ESP32 DEVKIT|DOIT ESP32 DEVKIT (ESP32 module)|
+|RP2|1K|VR 3362W trimmer, audio output level (to the radio)|
+|RP1|10K|VR 3362W trimmer, audio input level (from the radio)|
+|RJ11|RJ11-6P6C|RJ11 modular jack, 6 pins|
+|R13,R12,R11,R5,R3,R9|1K|R 1K 1/4W (colour code: brown black red)|
+|R7,R18,R19|100R|R 100R 1/4W (colour code: brown black black)|
+|R6,R2,R1|10K|R 10k 1/4W (colour code: brown black orange)|
+|R4|3K|R 3k 1/4W (colour code: orange black red)|
+|R10|33K|R 33K 1/4W (colour code: orange orange orange)|
+|Q1|2N3904|NPN transistor (TO-92)|
+|LED3|LED 3.5mm|Yellow, TX indicator|
+|LED2|LED 3.5mm|Green, RX indicator|
+|LED1|LED 3.5mm|Red, power indicator|
 |L1|L or JMP|L Isolate or Jumper|
-|C11|100uF/6.3V|ตัวเก็บประจุแบบอิเล็กโทรไลติก|
-|C4,C5|100nF|ตัวเก็บประจุแบบเซรามิกมัลติเลเยอร์|
-|C6|470uF/10V|ตัวเก็บประจุแบบอิเล็กโทรไลติก|
-|C1,C3,C10|100nF หรือ 0.1uF|ตัวเก็บประจุแบบโพลีโพรไพลีน|
-|C2|10nF หรือ 0.01uF|ตัวเก็บประจุแบบโพลีโพรไพลีน|
-|D2,D1|1N4148|ไดโอด หรือใช้ C 0.01uF แทนได้|
+|C11|100uF/6.3V|Electrolytic capacitor|
+|C4,C5|100nF|Multilayer ceramic capacitor|
+|C6|470uF/10V|Electrolytic capacitor|
+|C1,C3,C10|100nF or 0.1uF|Polypropylene capacitor|
+|C2|10nF or 0.01uF|Polypropylene capacitor|
+|D2,D1|1N4148|Diode, or a 0.01uF capacitor instead|
 
-*R18 and R19 ไม่ใส่ก็ได้.  
-*D2,D1 เปลี่ยนเป็นตัวเก็บประจุแบบเซรามิกมัลติเลเยอร์ค่า 10nF แทนได้ 
-*หากใช้ต่อกับวิทยุรับส่งเข้าขาไมค์นอก ให้เปลี่ยน R4 เป็น 100K
+*R18 and R19 may be left out.  
+*D2, D1 can be replaced by 10nF multilayer ceramic capacitors. 
+*When connected to the external microphone input of a transceiver, change R4 to 100K.
 
-จัดซื้อชุดคิทผ่าน Shopee ได้ที่ [คลิ๊ก](https://shopee.co.th/product/45191268/13373396785)
+The kit is sold by the original author on Shopee Thailand: [link](https://shopee.co.th/product/45191268/13373396785)
 
-The Howto DIY is [here](doc/ESP32DR_DIY-Thai.pdf)
+The DIY how-to (in Thai) is [here](doc/ESP32DR_DIY-Thai.pdf)
 
 ### Mounting drawing
 
