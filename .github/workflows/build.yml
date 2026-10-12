@@ -1,0 +1,113 @@
+# Builds the firmware for every board (the 13 environments of platformio.ini).
+# - Push and pull request: compile all of them; the .bin files are kept as build artifacts for 14 days.
+# - Tag "v*" (e.g. v1.8.1): also creates a DRAFT release with every firmware attached. Check it and
+#   publish it by hand (the files are not signed here: signing stays on the maintainer's PC).
+name: Build firmware
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.env }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # one board failing must not hide the result of the others
+      matrix:
+        include:
+          - { env: esp32-sh1106,    chip: esp32,   boot: '0x1000' }
+          - { env: esp32-nodisp,    chip: esp32,   boot: '0x1000' }
+          - { env: esp32-ssd1306,   chip: esp32,   boot: '0x1000' }
+          - { env: esp32-NOOTA,     chip: esp32,   boot: '0x1000' }
+          - { env: esp32c3-sh1106,  chip: esp32c3, boot: '0x0' }
+          - { env: esp32c3-ssd1306, chip: esp32c3, boot: '0x0' }
+          - { env: esp32c3-nodisp,  chip: esp32c3, boot: '0x0' }
+          - { env: esp32c3-NOOTA,   chip: esp32c3, boot: '0x0' }
+          - { env: esp32s3-sh1106,  chip: esp32s3, boot: '0x0' }
+          - { env: esp32s3-NOOTA,   chip: esp32s3, boot: '0x0' }
+          - { env: esp32s3-N16R8,   chip: esp32s3, boot: '0x0' }
+          - { env: TTGO-TWR,        chip: esp32s3, boot: '0x0' }
+          - { env: esp32c6,         chip: esp32c6, boot: '0x0' }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # PlatformIO packages (toolchains, frameworks) are big: keep them between runs, per board
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-${{ matrix.env }}-${{ hashFiles('platformio.ini') }}
+          restore-keys: pio-${{ matrix.env }}-
+
+      - name: Install PlatformIO and esptool
+        run: pip install --upgrade platformio esptool
+
+      - name: Build
+        run: pio run -e ${{ matrix.env }}
+
+      - name: Collect the firmware files
+        run: |
+          set -e
+          B=.pio/build/${{ matrix.env }}
+          OUT=out/${{ matrix.env }}
+          mkdir -p "$OUT"
+          APP0=$(find ~/.platformio/packages -path '*framework-arduinoespressif32*' -name boot_app0.bin | head -1)
+          cp "$B/firmware.bin" "$OUT/${{ matrix.env }}-update.bin"
+          # Full image for the first install by USB (esptool write_flash 0x0 ...): bootloader, partition
+          # table, OTA data and the application in one file
+          esptool.py --chip ${{ matrix.chip }} merge_bin -o "$OUT/${{ matrix.env }}-full.bin" \
+            ${{ matrix.boot }} "$B/bootloader.bin" 0x8000 "$B/partitions.bin" 0xe000 "$APP0" 0x10000 "$B/firmware.bin"
+          ( cd "$OUT" && sha256sum *.bin > SHA256SUMS.txt )
+          ls -l "$OUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.env }}
+          path: out/${{ matrix.env }}/
+          retention-days: 14
+
+  release:
+    name: Draft release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: One checksum list for every file
+        run: |
+          cd dist
+          rm -f SHA256SUMS.txt # each board brought its own; one list for all
+          sha256sum *.bin > SHA256SUMS.txt
+          ls -l
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            dist/*.bin
+            dist/SHA256SUMS.txt
+          body: |
+            Firmware for every supported board. Pick the files of your board:
+            - `<board>-update.bin`: for the web page (About / System: Firmware update) or OTA.
+            - `<board>-full.bin`: first install by USB, written at 0x0
+              (`esptool.py write_flash 0x0 <board>-full.bin`). Settings stored on the board are kept;
+              to start clean, erase the flash first (`esptool.py erase_flash`).
+            `SHA256SUMS.txt` lists the checksum of every file.
