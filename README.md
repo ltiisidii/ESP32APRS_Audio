@@ -166,6 +166,10 @@ for Handheld
 
 
 ## ESP32APRS_Audio firmware installation (do it first time, next time via the web browser)
+Ready-made firmware for every board is on the [Releases](https://github.com/ltiisidii/ESP32APRS_Audio/releases) page,
+built by GitHub Actions from this repository: `<board>-full.bin` for the first install by USB (write it at 0x0) and
+`<board>-update.bin` for later updates from the web page.
+
 - 1.Connect the USB cable to the ESP32 Module.
 - 2.Download firmware and open the program ESP32 DOWNLOAD TOOL, set it in the firmware upload program, set the firmware to ESP32_Vxx.bin, location 0x10000 and partitions.bin at 0x8000 and bootloader.bin at 0x1000 and boot.bin at 0xe000, if not loaded, connect GPIO0 cable to GND, press START button finished, press power button or reset (red) again.
 - 3.Then go to WiFi AP SSID: ESP32APRS_Audio and open a browser to the website. http://192.168.4.1 password: aprsthnetwork Can be fixed Or turn on your Wi-Fi router.
