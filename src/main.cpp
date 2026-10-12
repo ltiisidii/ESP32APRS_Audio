@@ -319,7 +319,7 @@ void pushTxDisp(uint8_t ch, const char *name, char *info)
     pkg.tx_ch = ch;
     strlcpy(pkg.name, name, sizeof(pkg.name));
     strlcpy(pkg.info, info, sizeof(pkg.info));
-    queTxDisp.push(&pkg); // ใส่แพ็จเก็จจาก TNC ลงคิวบัพเฟอร์
+    queTxDisp.push(&pkg); // put the packet from the TNC into the queue buffer
 }
 #endif
 
@@ -3069,7 +3069,7 @@ bool pkgTxSend()
 }
 
 uint8_t *packetData;
-// ฟังชั่นถูกเรียกมาจาก ax25_decode
+// called from ax25_decode
 // uint8_t swap=0;
 void aprs_msg_callback(struct AX25Msg *msg)
 {
@@ -3096,7 +3096,7 @@ void aprs_msg_callback(struct AX25Msg *msg)
     // pkg.rpt_list[0].ssid=1;
     // }
 
-    // PacketBuffer.push(&pkg); // ใส่แพ็จเก็จจาก TNC ลงคิวบัพเฟอร์
+    // PacketBuffer.push(&pkg); // put the packet from the TNC into the queue buffer
     status.rxCount++;
 }
 
@@ -3611,14 +3611,14 @@ boolean APRSConnect()
     // Serial.println(con);
     if (con <= 0)
     {
-        if (!aprsClient.connect(config.aprs_host, config.aprs_port)) // เชื่อมต่อกับเซิร์ฟเวอร์ TCP
+        if (!aprsClient.connect(config.aprs_host, config.aprs_port)) // connect to the TCP server
         {
             log_d("APRS-IS connect to %s:%d failed", config.aprs_host, config.aprs_port);
             aprsClient.stop();
             aprsIsUnlock();
             return false;
         }
-        // ขอเชื่อมต่อกับ aprsc
+        // log in to aprsc
         if (strlen(config.igate_object) >= 3)
         {
             uint16_t passcode = aprsParse.passCode(config.igate_object);
@@ -3786,7 +3786,7 @@ void setup()
 // {
 //     Serial.println(F("failed to initialise EEPROM")); // delay(100000);
 // }
-// // ตรวจสอบคอนฟิกซ์ผิดพลาด
+// // check for a bad configuration
 // ptr = (byte *)&config;
 // EEPROM.readBytes(1, ptr, sizeof(Configuration));
 // uint8_t chkSum = checkSum(ptr, sizeof(Configuration));
@@ -7360,7 +7360,7 @@ void taskAPRS(void *pvParameters)
             if (Ax25ReadNextRxFrame(&buf, &size, &peak, &valley, &signalLevel, &fixed, &mV))
             {
                 String tnc2 = "";
-                // นำข้อมูลแพ็จเกจจาก TNC ออกจากคิว
+                // take the packet from the TNC out of the queue
                 ax25_decode(buf, size, mV, &incomingPacket);                
                 status.allCount++;
                 if (isValidCallsignChars(incomingPacket.src.call) && packet2Raw(tnc2, incomingPacket) > 0)
@@ -8649,12 +8649,12 @@ void PPPOS_Start()
         // Configure the modem
         if (config.ppp_gnss)
         {
-            Serial.println(PPP.cmd("AT+QGPSCFG=\"outport\",\"uartdebug\"", 10000)); // กำหนดให้ NMEA output ผ่านพอร์ต UART Debug
-            Serial.println(PPP.cmd("AT+QGPSCFG=\"nmeasrc\",0", 10000));             // ปิดการดึง NMEA sentence ผ่าน AT+QGPSGNMEA
-            Serial.println(PPP.cmd("AT+QGPSCFG=\"gpsnmeatype\",63", 10000));        // เปิดใช้งาน NMEA sentence ทั้งหมด (GGA, RMC, GSV, GSA, VTG, GLL)
-            Serial.println(PPP.cmd("AT+QGPSCFG=\"gnssconfig\",1", 10000));          // เลือกใช้ระบบดาวเทียม GPS + BeiDou
-            Serial.println(PPP.cmd("AT+QGPSCFG=\"autogps\",0", 10000));             // ปิดใช้งาน GNSS อัตโนมัติเมื่อโมดูลเริ่มทำงาน
-            Serial.println(PPP.cmd("AT+QGPSCFG=\"apflash\",1", 10000));             // เปิดใช้งาน AP-Flash เพื่อการเริ่มต้นที่รวดเร็ว
+            Serial.println(PPP.cmd("AT+QGPSCFG=\"outport\",\"uartdebug\"", 10000)); // NMEA output on the UART debug port
+            Serial.println(PPP.cmd("AT+QGPSCFG=\"nmeasrc\",0", 10000));             // do not read NMEA sentences with AT+QGPSGNMEA
+            Serial.println(PPP.cmd("AT+QGPSCFG=\"gpsnmeatype\",63", 10000));        // enable every NMEA sentence (GGA, RMC, GSV, GSA, VTG, GLL)
+            Serial.println(PPP.cmd("AT+QGPSCFG=\"gnssconfig\",1", 10000));          // use the GPS + BeiDou satellite systems
+            Serial.println(PPP.cmd("AT+QGPSCFG=\"autogps\",0", 10000));             // do not start GNSS automatically when the module powers up
+            Serial.println(PPP.cmd("AT+QGPSCFG=\"apflash\",1", 10000));             // enable AP-Flash for a faster start
             Serial.println(PPP.cmd("AT+QGPS=1", 10000));
         }
 
@@ -9026,9 +9026,9 @@ void taskNetwork(void *pvParameters)
                         pingTimeout = millis64() + 300000;                // Reset ping timout
                         aprsIsLock(portMAX_DELAY);
                         String line = aprsClient.readStringUntil('\n');
-                        aprsIsUnlock(); // อ่านค่าที่ Server ตอบหลับมาทีละบรรทัด
+                        aprsIsUnlock(); // read the server answer line by line
                         status.isCount++;
-                        int start_val = line.indexOf(">", 0); // หาตำแหน่งแรกของ >
+                        int start_val = line.indexOf(">", 0); // position of the first >
                         if (start_val > 3)
                         {
                             String src_call = line.substring(0, start_val);
@@ -9561,7 +9561,7 @@ void dispWindow(String line, uint8_t mode, bool filter)
         if (start_val > 3 && start_val < 12)
             line = new_info;
     }
-    start_val = line.indexOf(">", 0); // หาตำแหน่งแรกของ >
+    start_val = line.indexOf(">", 0); // position of the first >
     if (start_val > 3 && start_val < 12)
     {
         // powerWakeup();

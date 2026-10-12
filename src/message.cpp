@@ -18,7 +18,7 @@ extern SemaphoreHandle_t psramMutex;
 extern bool psramLock(TickType_t timeout = portMAX_DELAY);
 extern void psramUnlock();
 
-// แปลง bytes → HEX string
+// bytes -> HEX string
 String bytesToHexString(const uint8_t *data, size_t len)
 {
     String hexString = "";
@@ -34,13 +34,13 @@ String bytesToHexString(const uint8_t *data, size_t len)
     return hexString;
 }
 
-// แปลง HEX string → bytes
+// HEX string -> bytes
 size_t hexStringToBytes(const String &hexString, uint8_t *output, size_t maxLen)
 {
     size_t len = hexString.length();
     size_t bytesCount = 0;
 
-    // ตรวจสอบความยาวต้องเป็นเลขคู่
+    // the length must be even
     if (len % 2 != 0)
         return 0;
 
@@ -365,7 +365,7 @@ int pkgMsgUpdate(const char *call, const char *raw, uint16_t msg_id, int8_t ack,
     return i;
 }
 
-// ===== ส่งข้อความ APRS =====
+// ===== Send an APRS message =====
 void sendAPRSMessage(const String &toCall, const String &message, bool encrypt)
 {
     ++msgID;
@@ -384,7 +384,7 @@ void sendAPRSMessage(const String &toCall, const String &message, bool encrypt)
     toCallUP.trim();
     toCallUP.toUpperCase();
 
-    // ฟอร์แมต: FROM>APRS,TCPIP*::TOCALL   :MESSAGE
+    // format: FROM>APRS,TCPIP*::TOCALL   :MESSAGE
     char toCallFixed[10];
     memset(toCallFixed, 0x20, 10);
 
@@ -445,7 +445,7 @@ void sendAPRSMessageRetry()
         {
             if(--msgQueue[i].ack>0) msgQueue[i].time = timeStamp+config.msg_interval; // update time only if retry left
 
-            // ฟอร์แมต: FROM>APRS,TCPIP*::TOCALL   :MESSAGE
+            // format: FROM>APRS,TCPIP*::TOCALL   :MESSAGE
             char toCallFixed[10];
             memset(toCallFixed, 0x20, 10);
             memcpy(toCallFixed, msgQueue[i].callsign, strlen(msgQueue[i].callsign));
@@ -491,7 +491,7 @@ void sendAPRSMessageRetry()
 
 void sendAPRSAck(const String &toCall, const String &msgNo)
 {
-    // ฟอร์แมต ACK: :TOCALL   :ackNN
+    // ACK format: :TOCALL   :ackNN
     char toCallFixed[10];
     memset(toCallFixed, 0x20, 10);
     memcpy(toCallFixed, toCall.c_str(), toCall.length());
@@ -519,12 +519,12 @@ void sendAPRSAck(const String &toCall, const String &msgNo)
     log_d("Send APRS ACK to %s msgNo %s TNC2: %s", toCall.c_str(), msgNo.c_str(), packet.c_str());
 }
 
-// ===== จัดการข้อความขาเข้า =====
+// ===== Incoming messages =====
 void handleIncomingAPRS(const String &line)
 {
     if (config.msg_enable == false)
         return;
-    // ตัวอย่างการกรองข้อความที่มีรูปแบบ Message
+    // keep only packets in the message format
     int msgPos = line.indexOf("::");
     if (msgPos <= 0)
         return;
@@ -540,7 +540,7 @@ void handleIncomingAPRS(const String &line)
 
         if (fromCall.equalsIgnoreCase(toCall))
         {
-            return; // ข้ามข้อความที่ส่งมาให้ตัวเอง
+            return; // skip messages sent by ourselves
         }
 
         int colonPos = payload.indexOf(':', 9);
@@ -549,13 +549,13 @@ void handleIncomingAPRS(const String &line)
             String message = payload.substring(colonPos + 1);
             message.trim();
 
-            // ตรวจว่ามีหมายเลขข้อความไหม (หลังเครื่องหมาย { )
+            // is there a message number (after the { sign)?
             String msgNo = "";
             int bracePos = message.indexOf('{');
             if (bracePos >= 0 && bracePos < (int)message.length() - 1)
             {
                 msgNo = message.substring(bracePos + 1);
-                message = message.substring(0, bracePos); // ตัดหมายเลขออกจากข้อความ
+                message = message.substring(0, bracePos); // remove the number from the text
                 message.trim();
             }
 
@@ -566,7 +566,7 @@ void handleIncomingAPRS(const String &line)
 
             log_d("📩 Message from %s to %s : %s", fromCall.c_str(), toCall.c_str(), message.c_str());
 
-            // ถ้าเป็นข้อความถึงเราเอง ให้ตอบกลับ ack
+            // a message to us: answer with an ack
             if (toCall.equalsIgnoreCase(config.msg_mycall) && msgNo.length() > 0)
             {
                 if (message.startsWith("ack"))
@@ -576,7 +576,7 @@ void handleIncomingAPRS(const String &line)
                     log_d("Message ACk from %s msgNo %d msgQueue %i", fromCall.c_str(), msgNo.toInt(), i);
                     if (i > -1)
                     {
-                        msgQueue[i].ack = -2; // ตอบรับแล้ว
+                        msgQueue[i].ack = -2; // acknowledged
                     }
                 }
                 else

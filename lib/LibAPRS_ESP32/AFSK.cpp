@@ -1652,7 +1652,7 @@ void AFSK_Poll(bool SA818, bool RFPower)
 
     //       // float adcF = hp_filter.Update((float)adcVal);
     //       // adcVal = (int)adcF;
-    //       // ไม่สามารถใช้งานในโหมด MONO ได้ จะต้องส่งข้อมูลตามลำดับซ้ายและขวา เอาต์พุต DAC บน I2S เป็นสเตอริโอเสมอ
+    //       // MONO mode cannot be used: data goes out left then right, the I2S DAC output is always stereo
     //       //  Ref: https://lang-ship.com/blog/work/esp32-i2s-dac/#toc6
     //       //  Left Channel GPIO 26
     //       pcm_out[x] = (uint16_t)adcVal; // MSB
@@ -1702,7 +1702,7 @@ void AFSK_Poll(bool SA818, bool RFPower)
     //     //   } while (bytesWritten > 0);
     //     // }
 
-    //     // รอให้ I2S DAC ส่งให้หมดบัพเฟอร์ก่อนสั่งปิด DAC/PTT
+    //     // wait until the I2S DAC has sent the whole buffer before turning DAC/PTT off
     //     if (AFSK_modem->sending == false)
     //     {
     //       int txEvents = 0;
