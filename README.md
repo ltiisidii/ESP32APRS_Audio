@@ -64,9 +64,31 @@ or iGate on a hilltop), at least as reliable as a dedicated TNC such as the Kant
 ## Hardware mod
 ![esp32dr_sql](image/ESP32IGate_SQL.jpg) 
 
-## Web service screen short
-![ESP32S3_CDTest](image/ESP32S3_CDTest.png) ![screen_dashboard](image/ESP32IGate_Screen_dashboard.png) ![screen_igate](image/ESP32IGate_Screen_igate.png) \
-![screen_mod](image/ESP32IGate_Screen_mod.png)
+## Web interface
+
+The station is set up and watched from a web browser (computer or phone). Screenshots of the current interface,
+taken on an ESP32DR SA868 board receiving the local APRS network:
+
+**Dashboard** - last heard stations with their comment/data, distance and audio level, plus statistics, radio, network and system status.
+![Dashboard](docs/images/ui-dashboard.png)
+
+**TNC2 terminal** - every packet decoded on RF, with the RX audio level meter used to set the receive level.
+![TNC2 terminal](docs/images/ui-terminal.png)
+
+**Radio** - frequency, power and module settings.
+![Radio](docs/images/ui-radio.png)
+
+**iGate** - station, APRS-IS server, gateway rules and position.
+![iGate](docs/images/ui-igate.png)
+
+**Objects** - up to 5 objects of the station (repeaters, events, places).
+![Objects](docs/images/ui-objects.png)
+
+**Modules** - how the hardware is wired (radio GPIOs, buses, GNSS, ports).
+![Modules](docs/images/ui-modules.png)
+
+Decoding test with the original interface (WA8LMF TNC Test CD, track 1):
+![ESP32S3_CDTest](image/ESP32S3_CDTest.png)
 
 ## ESP32DR_SA868
 Share project [here](https://oshwlab.com/APRSTH/esp32sa818) \
