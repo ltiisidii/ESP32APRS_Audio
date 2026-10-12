@@ -99,8 +99,7 @@ taken on an ESP32DR SA868 board receiving the local APRS network:
 **Modules** - how the hardware is wired (radio GPIOs, buses, GNSS, ports).
 ![Modules](docs/images/ui-modules.png)
 
-Decoding test with the original interface (WA8LMF TNC Test CD, track 1):
-![ESP32S3_CDTest](image/ESP32S3_CDTest.png)
+Decoding performance (WA8LMF TNC Test CD and Dire Wolf comparison) is in [Testing](#testing).
 
 ## ESP32DR_SA868
 Share project [here](https://oshwlab.com/APRSTH/esp32sa818) \
