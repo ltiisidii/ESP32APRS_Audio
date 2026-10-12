@@ -62,11 +62,44 @@ or iGate on a hilltop), at least as reliable as a dedicated TNC such as the Kant
 ![esp32dr_sa868_pcb](doc/ESP32DR_SA868/ESP32DR_SA868_Block.png)
 
 ## Hardware mod
-![esp32dr_sql](image/ESP32IGate_SQL.jpg) 
 
-## Web service screen short
-![ESP32S3_CDTest](image/ESP32S3_CDTest.png) ![screen_dashboard](image/ESP32IGate_Screen_dashboard.png) ![screen_igate](image/ESP32IGate_Screen_igate.png) \
-![screen_mod](image/ESP32IGate_Screen_mod.png)
+**SQL (squelch) pin.** The firmware samples the receive audio only while the radio's squelch is open, read on
+*SQL GPIO* (Modules page, Radio wiring). If the radio's squelch output is **not wired** to the ESP32 (for example
+the ESP32DR Simple circuit), set **SQL GPIO = -1**: the station then listens all the time and finds packets by the
+audio level. With the pin set but not wired, the firmware reads a floating input and may never decode anything.
+
+| Board | SQL GPIO |
+|---|---|
+| ESP32DR Simple (external radio by cable) | `-1` (not wired) |
+| ESP32DR SA868 | `33`, active LOW (the module's AUDIO_ON output) |
+| Other radio with its squelch output wired | the GPIO it is wired to |
+
+![SQL GPIO set to -1 on the Modules page](docs/images/ui-sql-simple.png)
+
+## Web interface
+
+The station is set up and watched from a web browser (computer or phone). Screenshots of the current interface,
+taken on an ESP32DR SA868 board receiving the local APRS network:
+
+**Dashboard** - last heard stations with their comment/data, distance and audio level, plus statistics, radio, network and system status.
+![Dashboard](docs/images/ui-dashboard.png)
+
+**TNC2 terminal** - every packet decoded on RF, with the RX audio level meter used to set the receive level.
+![TNC2 terminal](docs/images/ui-terminal.png)
+
+**Radio** - frequency, power and module settings.
+![Radio](docs/images/ui-radio.png)
+
+**iGate** - station, APRS-IS server, gateway rules and position.
+![iGate](docs/images/ui-igate.png)
+
+**Objects** - up to 5 objects of the station (repeaters, events, places).
+![Objects](docs/images/ui-objects.png)
+
+**Modules** - how the hardware is wired (radio GPIOs, buses, GNSS, ports).
+![Modules](docs/images/ui-modules.png)
+
+Decoding performance (WA8LMF TNC Test CD and Dire Wolf comparison) is in [Testing](#testing).
 
 ## ESP32DR_SA868
 Share project [here](https://oshwlab.com/APRSTH/esp32sa818) \
