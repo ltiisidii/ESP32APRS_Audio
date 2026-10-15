@@ -369,11 +369,12 @@ unsigned long timerAPRS, timerAPRS_old;
 unsigned long timerGPS, timerGPS_old;
 unsigned long timerSerial, timerSerial_old;
 
-// RF module UART. Chips with a third hardware UART (ESP32, ESP32-S3) use UART2 on the same pins: the software
+// RF module UART. Chips with a third hardware UART (ESP32, ESP32-S3) use UART1 on the same pins: the software
 // UART garbled commands after a software restart of the ESP32 (the SA868 answered +DMOERROR and stayed deaf).
-// ESP32-C3/C6 have only two UARTs and keep the software one. UART2 is then not free for GNSS/Modbus.
+// UART1, not UART2: the ESP32DR SA868 board brings UART2 (GPIO16/17) to its 4-pin header for a GPS.
+// UART1 is then not free for other uses. ESP32-C3/C6 have only two UARTs and keep the software one.
 #if SOC_UART_NUM > 2
-HardwareSerial SerialRF(2);
+HardwareSerial SerialRF(1);
 #define SERIAL_RF_FORMAT SERIAL_8N1
 #else
 EspSoftwareSerial::UART SerialRF;
