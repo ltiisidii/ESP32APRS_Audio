@@ -216,7 +216,6 @@ async function dashboard(main) {
         r.rssi !== undefined && ['RSSI', rssiText(r.rssi)],
         r.rf && ['Module', (r.version ? '<span class="ok">' + esc(String(r.version).replace(/^\+?VERSION:/i, '')) + '</span>' : '<span class="warn">no answer</span>') +
           (r.initError ? ' <span class="bad">config FAILED: ' + esc(r.initError) + '</span>' : (r.version ? ' <span class="muted">&middot; config OK</span>' : ''))],
-        r.recoveries > 0 && ['Module recovered', '<span class="warn">' + r.recoveries + ' time' + (r.recoveries > 1 ? 's' : '') + '</span> <span class="muted">(found deaf, set up again)</span>'],
         ['Modem', esc(r.modem)],
         ['FX.25', esc(r.fx25)],
       ])) +

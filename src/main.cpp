@@ -370,7 +370,7 @@ unsigned long timerGPS, timerGPS_old;
 unsigned long timerSerial, timerSerial_old;
 
 // RF module UART. Chips with a third hardware UART (ESP32, ESP32-S3) use UART1 on the same pins: the software
-// UART garbled commands after a software restart of the ESP32 (the SA868 answered +DMOERROR and stayed deaf).
+// UART garbled setup commands now and then (the SA868 answered +DMOERROR); the hardware one does not.
 // UART1, not UART2: the ESP32DR SA868 board brings UART2 (GPIO16/17) to its 4-pin header for a GPS.
 // UART1 is then not free for other uses. ESP32-C3/C6 have only two UARTs and keep the software one.
 #if SOC_UART_NUM > 2
@@ -3359,22 +3359,6 @@ void RF_MODULE(bool boot)
     xSemaphoreGive(rfUartLock);
 }
 
-extern bool sqlActive; // AFSK.cpp: squelch line open (read on every poll)
-extern int mVrms;      // AFSK.cpp: RMS level of the last audio block, mV
-volatile uint16_t rfRecoveries = 0; // times the SA868 was found deaf and set up again since boot
-
-// "Deaf" SA868: squelch line open while the audio is silent. A working module opens its squelch only with a
-// signal or noise, and both are loud at the ADC (tens to hundreds of mV); silence with an open squelch is the
-// stuck state. Needs the SQL GPIO wired (SA868 boards: GPIO33).
-#define SA868_DEAF_AUDIO_MV 8   // below this with the squelch open = silent
-#define SA868_DEAF_POLLS 6      // 6 polls x 5 s = 30 s in that state before acting
-static const uint32_t sa868RecoverPdMs[] = {3000, 5000, 10000}; // power-down time per attempt, then it repeats the last
-
-static bool sa868LooksDeaf()
-{
-    return config.rf_sql_gpio > -1 && sqlActive && mVrms < SA868_DEAF_AUDIO_MV && !getTransmit();
-}
-
 // Every 5 s, at low priority, when the module is an SA868 and is not transmitting. It never waits for the
 // lock: if the module is being reconfigured, that reading is skipped. The answer comes over the UART, apart
 // from the receive audio path (module speaker output -> ADC), so decoding is not touched.
@@ -3405,21 +3389,6 @@ static void rfRssiTask(void *)
         rfRssi = v > 0 ? v : -1;
         rfRssiState = v > 0 ? "ok" : "no answer";
 
-        // 30 s in the deaf state the first time, then twice as long after each recovery (up to 32 min): a board whose
-        // RX audio is set far too low must not have its receiver restarted every 30 s
-        static uint16_t deafPolls = 0;
-        deafPolls = sa868LooksDeaf() ? deafPolls + 1 : 0;
-        if (deafPolls >= (uint16_t)(SA868_DEAF_POLLS << (rfRecoveries < 6 ? rfRecoveries : 6)))
-        {
-            uint8_t n = rfRecoveries < 3 ? rfRecoveries : 2;
-            log_e("SA868 deaf (squelch open, audio %d mV, RSSI %d): power-down %u ms and setup again", mVrms, v, (unsigned)sa868RecoverPdMs[n]);
-            rfRssiState = "recovering module";
-            xSemaphoreTake(rfUartLock, portMAX_DELAY);
-            RF_MODULE_locked(true, sa868RecoverPdMs[n]);
-            xSemaphoreGive(rfUartLock);
-            rfRecoveries++;
-            deafPolls = 0;
-        }
     }
 }
 
@@ -3430,10 +3399,7 @@ void rfRssiStart()
         started = xTaskCreate(rfRssiTask, "rfRssi", 3072, nullptr, 1, nullptr) == pdPASS;
 }
 
-// SA868 after a software restart of the ESP32 (web update, supervisor, Reboot button): the module never lost
-// power and could stay "deaf" - squelch line open, audio silent, low RSSI - although it accepted every setting.
-// Only a real power cycle brought it back. It is now kept powered down (PD) longer before the setup, and
-// rfRssiTask() watches for that state and repeats the power-down + setup by itself (sa868Recover()).
+// Module powered down (PD) a little longer at boot before the setup (it was 0.5 s)
 #define SA868_PD_OFF_BOOT_MS 2000
 static bool rfSerialStarted = false;
 
@@ -3809,8 +3775,74 @@ void bluetooth_init()
 #define WDT_TIMEOUT 10
 
 bool AFSKInitAct = false;
+// A partial restart (software: web update, Reboot, supervisor; task/interrupt watchdog; crash) resets the CPU
+// but not the RTC domain, and the SA868 board then stayed deaf: RSSI floor low, no packets, although the module
+// accepted every setting. A power cycle, the EN pin and the RTC watchdog reset everything and it works. So a
+// partial restart is turned into a full one right at the start, once, with the RTC watchdog; the original cause
+// is kept in RTC memory for the web status.
+#include "hal/wdt_hal.h"
+#include <Preferences.h>
+#include <esp_ota_ops.h>
+int8_t startCauseBeforeFullReset = -1; // esp_reset_reason_t of the partial restart, -1 = none (webapi.cpp)
+
+bool fullResetAfterOtaConfirm = false; // partial start of a firmware still on trial: supervisor resets after confirming it
+
+// Full reset now, through the RTC watchdog (resets the RTC domain too, like the EN pin)
+void fullResetNow(uint8_t from)
+{
+    Preferences p;
+    if (p.begin("boot", false))
+    {
+        p.putUChar("from", from); // the RTC memory does not survive: keep the original cause in NVS
+        p.end();
+    }
+    wdt_hal_context_t rtc = RWDT_HAL_CONTEXT_DEFAULT();
+    wdt_hal_write_protect_disable(&rtc);
+    wdt_hal_config_stage(&rtc, WDT_STAGE0, 20000, WDT_STAGE_ACTION_RESET_RTC); // ~0.1 s of RTC slow clock
+    wdt_hal_enable(&rtc);
+    wdt_hal_write_protect_enable(&rtc);
+    for (;;)
+    {
+    }
+}
+
+static void fullResetIfPartial()
+{
+    esp_reset_reason_t r = esp_reset_reason();
+    Preferences p;
+    bool nvs = p.begin("boot", false);
+    if (r != ESP_RST_SW && r != ESP_RST_PANIC && r != ESP_RST_INT_WDT && r != ESP_RST_TASK_WDT)
+    {
+        // the full reset we asked for (the RTC memory is cleared by it, so the cause waits in NVS)
+        if (nvs && p.isKey("from"))
+        {
+            startCauseBeforeFullReset = (int8_t)p.getUChar("from", 0);
+            p.remove("from");
+        }
+        if (nvs)
+            p.end();
+        return;
+    }
+    if (nvs)
+    {
+        p.remove("from"); // a cause left from an earlier attempt must not show on this start
+        p.end();
+    }
+    // A firmware just installed runs on trial until the supervisor confirms it (2 min): a reset before that makes
+    // the bootloader go back to the previous one. Then the full reset waits for the confirmation.
+    esp_ota_img_states_t state;
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    if (running && esp_ota_get_state_partition(running, &state) == ESP_OK && state == ESP_OTA_IMG_PENDING_VERIFY)
+    {
+        fullResetAfterOtaConfirm = true;
+        return;
+    }
+    fullResetNow((uint8_t)r);
+}
+
 void setup()
 {
+    fullResetIfPartial();
     // byte *ptr;
     //  setCpuFrequencyMhz(160);
 #ifdef BOARD_HAS_PSRAM

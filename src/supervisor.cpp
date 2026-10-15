@@ -7,12 +7,12 @@
 #include <esp_attr.h>
 #include <esp_heap_caps.h>
 #include "supervisor.h"
+#include <Preferences.h>
 
 #define SV_CHECK_PERIOD_MS 1000
 #define SV_ADC_STALL_MS 30000      // RX audio sampling stopped
 #define SV_ADC_PAUSE_MAX_MS 300000 // RX audio paused on purpose (OTA, saving) for longer than this
 #define SV_OTA_CONFIRM_MS 120000   // healthy run time before confirming a new OTA firmware
-#define SV_RESET_MAGIC 0x53555056  // "SUPV"
 #define SV_REPORT_MS 600000        // health report period in the log
 
 extern volatile uint32_t adcIsrCount; // AFSK.cpp, counts ADC sampling interrupts
@@ -34,8 +34,8 @@ static volatile uint32_t svLastFeed[SV_TASK_COUNT];
 static TaskHandle_t svHandle[SV_TASK_COUNT];
 
 // Survives esp_restart(), so the reason can be logged after the reboot
-RTC_NOINIT_ATTR static uint32_t svResetMagic;
-RTC_NOINIT_ATTR static char svResetReason[48];
+// The reason is kept in NVS: a software restart is turned into a full reset at boot (main.cpp
+// fullResetIfPartial), which clears the RTC memory where it used to be. Written only when the supervisor acts.
 static char svLastReason[48]; // copy taken at boot: why the previous run was restarted ("" = not by us)
 
 const char *supervisorLastRestart(void)
@@ -62,8 +62,12 @@ void supervisorFeed(SupervisedTask id)
 static void supervisorRestart(const char *reason)
 {
     log_e("SUPERVISOR: %s, restarting", reason);
-    strlcpy(svResetReason, reason, sizeof(svResetReason));
-    svResetMagic = SV_RESET_MAGIC;
+    Preferences p;
+    if (p.begin("supervisor", false))
+    {
+        p.putString("why", reason);
+        p.end();
+    }
     delay(100); // let the log out
     esp_restart();
 }
@@ -99,7 +103,13 @@ static void otaConfirmIfPending(void)
     if (state == ESP_OTA_IMG_PENDING_VERIFY)
     {
         if (esp_ota_mark_app_valid_cancel_rollback() == ESP_OK)
+        {
             log_i("SUPERVISOR: new firmware confirmed, rollback cancelled");
+            extern bool fullResetAfterOtaConfirm;  // main.cpp: the update restarted it only partially
+            extern void fullResetNow(uint8_t from); // main.cpp
+            if (fullResetAfterOtaConfirm)
+                fullResetNow((uint8_t)ESP_RST_SW); // now it can: the new firmware stays (the radio needs it)
+        }
         else
             log_e("SUPERVISOR: can't confirm new firmware");
     }
@@ -183,13 +193,18 @@ static void taskSupervisor(void *pvParameters)
 
 void supervisorStart(void)
 {
-    if (svResetMagic == SV_RESET_MAGIC)
+    Preferences p;
+    if (p.begin("supervisor", false))
     {
-        svResetReason[sizeof(svResetReason) - 1] = 0;
-        log_e("SUPERVISOR: last restart was forced: %s", svResetReason);
-        strlcpy(svLastReason, svResetReason, sizeof(svLastReason));
+        String why = p.getString("why", "");
+        if (why.length())
+        {
+            log_e("SUPERVISOR: last restart was forced: %s", why.c_str());
+            strlcpy(svLastReason, why.c_str(), sizeof(svLastReason));
+            p.remove("why");
+        }
+        p.end();
     }
-    svResetMagic = 0;
 
     // High priority so a busy lower-priority task can't starve it; it sleeps almost all the time
     xTaskCreatePinnedToCore(taskSupervisor, "taskSupervisor", 3072, NULL, 12, NULL, 0);
