@@ -625,7 +625,7 @@ static void apiLastHeard(AsyncWebServerRequest *request)
         return;
     AsyncResponseStream *res = request->beginResponseStream("application/json");
     res->addHeader("Cache-Control", "no-store");
-    res->print(lastHeardJson());
+    lastHeardJson(*res);
     request->send(res);
 }
 

@@ -131,6 +131,6 @@ void handle_firmware();
 void webService();
 extern void RF_MODULE(bool boot);
 String event_chatMessage(bool gethtml=false);
-String lastHeardJson();
+void lastHeardJson(Print &out); // writes the JSON array straight into out (e.g. the HTTP response)
 
 #endif
