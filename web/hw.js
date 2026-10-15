@@ -4,7 +4,14 @@
 const SENSOR_CH = [[0, 'NONE']].concat([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => [n, 'SENSOR#' + n]));
 const LOWHIGH = [[false, 'LOW'], [true, 'HIGH']];
 const gpio = (k, l, meta, h) => ({ k, l, t: 'num', min: -1, max: meta.gpioMax, h: h || '-1 = not used' });
-const baud = (k, l, meta) => ({ k, l: l || 'Baudrate', t: 'sel', o: meta.baudrates.map((b) => [b, String(b)]) });
+// The saved value stays selectable even when it is not in the list (e.g. 0 = never set), so opening the page
+// never shows a change nobody made
+const baud = (k, l, meta) => {
+  const o = meta.baudrates.map((b) => [b, String(b)]);
+  const cur = typeof CFG !== 'undefined' && CFG ? CFG[k] : undefined;
+  if (cur !== undefined && !meta.baudrates.includes(cur)) o.unshift([cur, cur ? String(cur) : 'not set']);
+  return { k, l: l || 'Baudrate', t: 'sel', o };
+};
 
 // ---- Weather (old WX tab) ----
 pages.weather = (main) => formPage(main, (cfg, meta) => {
@@ -198,7 +205,9 @@ pages.modules = (main) => formPage(main, (cfg, meta) => {
       { k: 'uart' + n + 'En', l: 'Enable', t: 'sw' },
       gpio('uart' + n + 'RX', 'RX GPIO', meta), gpio('uart' + n + 'TX', 'TX GPIO', meta), gpio('uart' + n + 'RTS', 'RTS/DE GPIO', meta),
       baud('uart' + n + 'BR', 'Baudrate', meta),
-    ],
+    ].filter((f) => cfg[f.k] !== undefined), // UART2 has no RTS setting
+    note: n === 1 ? 'On ESP32 and ESP32-S3 boards with an RF module (SA868...), UART1 talks to the module: keep it off here. ' +
+      'Use UART2 for a GPS (on the ESP32DR SA868 board, its 4-pin header).' : undefined,
   });
   const i2c = (p, title) => ({
     title,
@@ -212,7 +221,7 @@ pages.modules = (main) => formPage(main, (cfg, meta) => {
     fields: [{ k: 'cnt' + n + 'En', l: 'Enable', t: 'sw' }, gpio('cnt' + n + 'IO', 'Input GPIO', meta), { k: 'cnt' + n + 'Act', l: 'Active', t: 'sel', o: LOWHIGH }],
   });
   const sections = [
-    uart(0), uart(1),
+    uart(0), uart(1), uart(2),
     { title: '1-Wire bus', fields: [{ k: 'oneWireEn', l: 'Enable', t: 'sw' }, gpio('oneWireIO', 'GPIO', meta)] },
     {
       title: 'Radio wiring',
@@ -284,7 +293,7 @@ pages.modules = (main) => formPage(main, (cfg, meta) => {
     });
   }
   // Most used first: the radio wiring, then GPS and serial ports, buses, inputs, external devices
-  const ORDER = ['Radio wiring', 'GNSS', 'UART0', 'UART1', 'I2C 0 (display)', 'I2C 1', '1-Wire bus', 'Counter 0', 'Counter 1',
+  const ORDER = ['Radio wiring', 'GNSS', 'UART0', 'UART1', 'UART2', 'I2C 0 (display)', 'I2C 1', '1-Wire bus', 'Counter 0', 'Counter 1',
     'Modbus', 'External TNC', 'Cellular modem (PPPoS)', 'AT command channels'];
   sections.sort((x, y) => ORDER.indexOf(x.title) - ORDER.indexOf(y.title));
   return {

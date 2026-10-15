@@ -59,6 +59,8 @@ extern int mVrms;                     // AFSK.cpp: RMS level of the last audio b
 extern volatile uint32_t adcIsrCount; // AFSK.cpp: ADC samples taken
 extern String rfRssiRaw;
 extern String rfInitError;
+extern int8_t startCauseBeforeFullReset; // main.cpp: partial restart turned into a full one (-1 = none)
+void rfLogRead(JsonArray out);           // main.cpp: last module setup commands and answers
 extern volatile bool bootArmed; // main.cpp: BOOT button seen released since boot
 bool bootPressed();
 extern const char *volatile rfRssiState;
@@ -123,6 +125,27 @@ static void sendJson(AsyncWebServerRequest *request, JsonDocument &doc, int code
     request->send(res);
 }
 
+// What started the chip this time, from the ESP32 itself (a power cut and a software restart look alike otherwise)
+static const char *resetCauseText()
+{
+    // after fullResetIfPartial() the chip reports the RTC watchdog: show what started it
+    esp_reset_reason_t r = startCauseBeforeFullReset >= 0 ? (esp_reset_reason_t)startCauseBeforeFullReset : esp_reset_reason();
+    switch (r)
+    {
+    case ESP_RST_POWERON: return "power on";
+    case ESP_RST_EXT: return "reset pin";
+    case ESP_RST_SW: return "software (update, reboot or supervisor), then full reset";
+    case ESP_RST_PANIC: return "crash, then full reset";
+    case ESP_RST_INT_WDT: return "interrupt watchdog, then full reset";
+    case ESP_RST_TASK_WDT: return "task watchdog, then full reset";
+    case ESP_RST_WDT: return "watchdog";
+    case ESP_RST_DEEPSLEEP: return "deep sleep wake-up";
+    case ESP_RST_BROWNOUT: return "brownout (supply voltage dropped)";
+    case ESP_RST_SDIO: return "SDIO";
+    default: return "unknown";
+    }
+}
+
 static void apiInfo(AsyncWebServerRequest *request)
 {
     if (!authOk(request))
@@ -140,6 +163,7 @@ static void apiInfo(AsyncWebServerRequest *request)
         doc["vbat"] = serialized(String(VBat, 2));
     doc["uptime"] = (uint32_t)(millis64() / 1000);
     doc["lastRestart"] = supervisorLastRestart(); // "" unless the supervisor forced the last restart
+    doc["resetCause"] = resetCauseText();          // why the ESP32 started: power on, software, watchdog, brownout...
     doc["loopStage"] = (const char *)loopStage;    // where the Arduino loop() is (OLED, BOOT button)
     doc["bootPin"] = bootPressed() ? "pressed" : "released"; // BOOT button / GPIO0 as the firmware reads it
     doc["bootArmed"] = bootArmed;
@@ -537,6 +561,16 @@ static void apiReboot(AsyncWebServerRequest *request)
 }
 
 // Live sensor readings for the Sensors page (the old page showed them once, at load)
+// GET /api/radiolog: last setup commands sent to the RF module and its exact answers (diagnostics)
+static void apiRadioLog(AsyncWebServerRequest *request)
+{
+    if (!authOk(request))
+        return;
+    JsonDocument doc;
+    rfLogRead(doc.to<JsonArray>());
+    sendJson(request, doc);
+}
+
 // GET /api/objects: runtime state of the APRS objects (Objects page)
 static void apiObjects(AsyncWebServerRequest *request)
 {
@@ -938,6 +972,7 @@ void webApiRegister(AsyncWebServer &server)
     server.on("/api/monitor", HTTP_GET, apiMonitor);
     server.on("/api/gnss", HTTP_GET, apiGnss);
     server.on("/api/about", HTTP_GET, apiAbout);
+    server.on("/api/radiolog", HTTP_GET, apiRadioLog);
     server.on("/api/objects/kill", HTTP_POST, apiObjectKill);
     server.on("/api/objects", HTTP_GET, apiObjects);
     server.on("/api/sensors", HTTP_GET, apiSensors);

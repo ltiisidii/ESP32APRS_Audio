@@ -369,8 +369,17 @@ unsigned long timerAPRS, timerAPRS_old;
 unsigned long timerGPS, timerGPS_old;
 unsigned long timerSerial, timerSerial_old;
 
-// SoftwareSerial SerialRF;
+// RF module UART. Chips with a third hardware UART (ESP32, ESP32-S3) use UART1 on the same pins: the software
+// UART garbled setup commands now and then (the SA868 answered +DMOERROR); the hardware one does not.
+// UART1, not UART2: the ESP32DR SA868 board brings UART2 (GPIO16/17) to its 4-pin header for a GPS.
+// UART1 is then not free for other uses. ESP32-C3/C6 have only two UARTs and keep the software one.
+#if SOC_UART_NUM > 2
+HardwareSerial SerialRF(1);
+#define SERIAL_RF_FORMAT SERIAL_8N1
+#else
 EspSoftwareSerial::UART SerialRF;
+#define SERIAL_RF_FORMAT EspSoftwareSerial::SWSERIAL_8N1
+#endif
 
 bool firstGpsTime = true;
 time_t startTime = 0;
@@ -3196,6 +3205,28 @@ int SA868_getRSSI()
 // Result of the last SA868 setup: "" = the module accepted every setting, else what failed (for the web)
 String rfInitError;
 
+// Last setup commands sent to the module and what it answered, exactly (/api/radiolog), to see what goes wrong
+#define RF_LOG_N 24
+static char rfLog[RF_LOG_N][72];
+static uint8_t rfLogHead = 0, rfLogCount = 0;
+static void rfLogAdd(char dir, const char *text)
+{
+    char *e = rfLog[rfLogHead];
+    unsigned long t = millis() / 1000;
+    int n = snprintf(e, sizeof(rfLog[0]), "%lus %c ", t, dir);
+    for (const char *p = text; *p && n < (int)sizeof(rfLog[0]) - 1; p++)
+        e[n++] = (*p >= 0x20 && *p < 0x7f) ? *p : (*p == '\r' || *p == '\n') ? '|' : '?';
+    e[n] = 0;
+    rfLogHead = (rfLogHead + 1) % RF_LOG_N;
+    if (rfLogCount < RF_LOG_N)
+        rfLogCount++;
+}
+void rfLogRead(JsonArray out) // oldest first
+{
+    for (int i = 0; i < rfLogCount; i++)
+        out.add(rfLog[(rfLogHead + RF_LOG_N - rfLogCount + i) % RF_LOG_N]);
+}
+
 // One SA868 setup command, checked: the module answers "+<CMD>:0" when it accepted it. Up to 3 tries:
 // at boot the first answer sometimes came back garbled ("+DOOERPOR"), and then the frequency could be
 // left unprogrammed without anyone noticing.
@@ -3207,7 +3238,10 @@ static bool sa868Cmd(const char *cmd, const char *what)
         while (SerialRF.available() > 0)
             SerialRF.read();
         SerialRF.print(cmd);
-        if (SA868_waitResponse(data, "\r\n", 1500))
+        rfLogAdd('>', cmd);
+        bool got = SA868_waitResponse(data, "\r\n", 1500);
+        rfLogAdd('<', got ? data.c_str() : "(no answer)");
+        if (got)
         {
             int c = data.indexOf(':');
             if (data.startsWith("+") && c > 0 && data.charAt(c + 1) == '0')
@@ -3230,7 +3264,10 @@ String SA868_getVERSION()
     int rssi;
 
     SerialRF.printf("AT+VERSION\r\n");
-    if (SA868_waitResponse(data, "\r\n", 1000))
+    rfLogAdd('>', "AT+VERSION");
+    bool got = SA868_waitResponse(data, "\r\n", 1000);
+    rfLogAdd('<', got ? data.c_str() : "(no answer)");
+    if (got)
     {
         String version = data.substring(0, data.indexOf("\r\n"));
         return version;
@@ -3314,7 +3351,7 @@ String ctcssToHex(unsigned int decValue, int section)
     }
 }
 
-static void RF_MODULE_locked(bool boot);
+static void RF_MODULE_locked(bool boot, uint32_t pdOffMs = 0);
 void RF_MODULE(bool boot)
 {
     xSemaphoreTake(rfUartLock, portMAX_DELAY);
@@ -3351,6 +3388,7 @@ static void rfRssiTask(void *)
         xSemaphoreGive(rfUartLock);
         rfRssi = v > 0 ? v : -1;
         rfRssiState = v > 0 ? "ok" : "no answer";
+
     }
 }
 
@@ -3361,7 +3399,11 @@ void rfRssiStart()
         started = xTaskCreate(rfRssiTask, "rfRssi", 3072, nullptr, 1, nullptr) == pdPASS;
 }
 
-static void RF_MODULE_locked(bool boot)
+// Module powered down (PD) a little longer at boot before the setup (it was 0.5 s)
+#define SA868_PD_OFF_BOOT_MS 2000
+static bool rfSerialStarted = false;
+
+static void RF_MODULE_locked(bool boot, uint32_t pdOffMs)
 {
     String data;
     if (config.rf_en == false)
@@ -3389,11 +3431,12 @@ static void RF_MODULE_locked(bool boot)
     // digitalWrite(config.rf_ptt_gpio, !config.rf_ptt_active); // PTT HIGH
     pinModeSafe(config.rf_pd_gpio, OUTPUT);
     digitalWrite(config.rf_pd_gpio, !config.rf_pd_active); // PD LOW
-    delay(500);
-    if (boot)
+    delay(pdOffMs ? pdOffMs : boot ? SA868_PD_OFF_BOOT_MS : 500); // longer at boot: see SA868_PD_OFF_BOOT_MS
+    if (boot && !rfSerialStarted)
     {
-        SerialRF.begin(config.rf_baudrate, EspSoftwareSerial::SWSERIAL_8N1, config.rf_rx_gpio, config.rf_tx_gpio);
+        SerialRF.begin(config.rf_baudrate, SERIAL_RF_FORMAT, config.rf_rx_gpio, config.rf_tx_gpio);
         SerialRF.setTimeout(10);
+        rfSerialStarted = true;
     }
     digitalWrite(config.rf_pd_gpio, config.rf_pd_active); // PD HIGH
 
@@ -3732,8 +3775,74 @@ void bluetooth_init()
 #define WDT_TIMEOUT 10
 
 bool AFSKInitAct = false;
+// A partial restart (software: web update, Reboot, supervisor; task/interrupt watchdog; crash) resets the CPU
+// but not the RTC domain, and the SA868 board then stayed deaf: RSSI floor low, no packets, although the module
+// accepted every setting. A power cycle, the EN pin and the RTC watchdog reset everything and it works. So a
+// partial restart is turned into a full one right at the start, once, with the RTC watchdog; the original cause
+// is kept in RTC memory for the web status.
+#include "hal/wdt_hal.h"
+#include <Preferences.h>
+#include <esp_ota_ops.h>
+int8_t startCauseBeforeFullReset = -1; // esp_reset_reason_t of the partial restart, -1 = none (webapi.cpp)
+
+bool fullResetAfterOtaConfirm = false; // partial start of a firmware still on trial: supervisor resets after confirming it
+
+// Full reset now, through the RTC watchdog (resets the RTC domain too, like the EN pin)
+void fullResetNow(uint8_t from)
+{
+    Preferences p;
+    if (p.begin("boot", false))
+    {
+        p.putUChar("from", from); // the RTC memory does not survive: keep the original cause in NVS
+        p.end();
+    }
+    wdt_hal_context_t rtc = RWDT_HAL_CONTEXT_DEFAULT();
+    wdt_hal_write_protect_disable(&rtc);
+    wdt_hal_config_stage(&rtc, WDT_STAGE0, 20000, WDT_STAGE_ACTION_RESET_RTC); // ~0.1 s of RTC slow clock
+    wdt_hal_enable(&rtc);
+    wdt_hal_write_protect_enable(&rtc);
+    for (;;)
+    {
+    }
+}
+
+static void fullResetIfPartial()
+{
+    esp_reset_reason_t r = esp_reset_reason();
+    Preferences p;
+    bool nvs = p.begin("boot", false);
+    if (r != ESP_RST_SW && r != ESP_RST_PANIC && r != ESP_RST_INT_WDT && r != ESP_RST_TASK_WDT)
+    {
+        // the full reset we asked for (the RTC memory is cleared by it, so the cause waits in NVS)
+        if (nvs && p.isKey("from"))
+        {
+            startCauseBeforeFullReset = (int8_t)p.getUChar("from", 0);
+            p.remove("from");
+        }
+        if (nvs)
+            p.end();
+        return;
+    }
+    if (nvs)
+    {
+        p.remove("from"); // a cause left from an earlier attempt must not show on this start
+        p.end();
+    }
+    // A firmware just installed runs on trial until the supervisor confirms it (2 min): a reset before that makes
+    // the bootloader go back to the previous one. Then the full reset waits for the confirmation.
+    esp_ota_img_states_t state;
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    if (running && esp_ota_get_state_partition(running, &state) == ESP_OK && state == ESP_OTA_IMG_PENDING_VERIFY)
+    {
+        fullResetAfterOtaConfirm = true;
+        return;
+    }
+    fullResetNow((uint8_t)r);
+}
+
 void setup()
 {
+    fullResetIfPartial();
     // byte *ptr;
     //  setCpuFrequencyMhz(160);
 #ifdef BOARD_HAS_PSRAM

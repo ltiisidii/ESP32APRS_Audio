@@ -228,6 +228,7 @@ async function dashboard(main) {
       ])) +
       card('System', rows([
         ['Firmware', esc(i.version)],
+        i.resetCause && ['Last start', esc(i.resetCause) + (i.lastRestart ? ' <span class="warn">&middot; supervisor: ' + esc(i.lastRestart) + '</span>' : '')],
         ['Chip', esc(i.chip) + ' @ ' + i.cpuMhz + ' MHz'],
         ['RAM free', kb(i.heap) + ' / ' + kb(i.heapSize) + ' (min ' + kb(i.heapMin) + ')' + bar(i.heapSize - i.heap, i.heapSize)],
         i.psramSize && ['PSRAM free', kb(i.psram) + ' / ' + kb(i.psramSize)],
