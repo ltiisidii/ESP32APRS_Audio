@@ -60,6 +60,7 @@ extern volatile uint32_t adcIsrCount; // AFSK.cpp: ADC samples taken
 extern String rfRssiRaw;
 extern String rfInitError;
 extern volatile uint16_t rfRecoveries; // main.cpp: SA868 found deaf and set up again
+void rfLogRead(JsonArray out);           // main.cpp: last module setup commands and answers
 extern volatile bool bootArmed; // main.cpp: BOOT button seen released since boot
 bool bootPressed();
 extern const char *volatile rfRssiState;
@@ -559,6 +560,16 @@ static void apiReboot(AsyncWebServerRequest *request)
 }
 
 // Live sensor readings for the Sensors page (the old page showed them once, at load)
+// GET /api/radiolog: last setup commands sent to the RF module and its exact answers (diagnostics)
+static void apiRadioLog(AsyncWebServerRequest *request)
+{
+    if (!authOk(request))
+        return;
+    JsonDocument doc;
+    rfLogRead(doc.to<JsonArray>());
+    sendJson(request, doc);
+}
+
 // GET /api/objects: runtime state of the APRS objects (Objects page)
 static void apiObjects(AsyncWebServerRequest *request)
 {
@@ -960,6 +971,7 @@ void webApiRegister(AsyncWebServer &server)
     server.on("/api/monitor", HTTP_GET, apiMonitor);
     server.on("/api/gnss", HTTP_GET, apiGnss);
     server.on("/api/about", HTTP_GET, apiAbout);
+    server.on("/api/radiolog", HTTP_GET, apiRadioLog);
     server.on("/api/objects/kill", HTTP_POST, apiObjectKill);
     server.on("/api/objects", HTTP_GET, apiObjects);
     server.on("/api/sensors", HTTP_GET, apiSensors);

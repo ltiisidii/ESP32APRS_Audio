@@ -369,8 +369,16 @@ unsigned long timerAPRS, timerAPRS_old;
 unsigned long timerGPS, timerGPS_old;
 unsigned long timerSerial, timerSerial_old;
 
-// SoftwareSerial SerialRF;
+// RF module UART. Chips with a third hardware UART (ESP32, ESP32-S3) use UART2 on the same pins: the software
+// UART garbled commands after a software restart of the ESP32 (the SA868 answered +DMOERROR and stayed deaf).
+// ESP32-C3/C6 have only two UARTs and keep the software one. UART2 is then not free for GNSS/Modbus.
+#if SOC_UART_NUM > 2
+HardwareSerial SerialRF(2);
+#define SERIAL_RF_FORMAT SERIAL_8N1
+#else
 EspSoftwareSerial::UART SerialRF;
+#define SERIAL_RF_FORMAT EspSoftwareSerial::SWSERIAL_8N1
+#endif
 
 bool firstGpsTime = true;
 time_t startTime = 0;
@@ -3196,6 +3204,28 @@ int SA868_getRSSI()
 // Result of the last SA868 setup: "" = the module accepted every setting, else what failed (for the web)
 String rfInitError;
 
+// Last setup commands sent to the module and what it answered, exactly (/api/radiolog), to see what goes wrong
+#define RF_LOG_N 24
+static char rfLog[RF_LOG_N][72];
+static uint8_t rfLogHead = 0, rfLogCount = 0;
+static void rfLogAdd(char dir, const char *text)
+{
+    char *e = rfLog[rfLogHead];
+    unsigned long t = millis() / 1000;
+    int n = snprintf(e, sizeof(rfLog[0]), "%lus %c ", t, dir);
+    for (const char *p = text; *p && n < (int)sizeof(rfLog[0]) - 1; p++)
+        e[n++] = (*p >= 0x20 && *p < 0x7f) ? *p : (*p == '\r' || *p == '\n') ? '|' : '?';
+    e[n] = 0;
+    rfLogHead = (rfLogHead + 1) % RF_LOG_N;
+    if (rfLogCount < RF_LOG_N)
+        rfLogCount++;
+}
+void rfLogRead(JsonArray out) // oldest first
+{
+    for (int i = 0; i < rfLogCount; i++)
+        out.add(rfLog[(rfLogHead + RF_LOG_N - rfLogCount + i) % RF_LOG_N]);
+}
+
 // One SA868 setup command, checked: the module answers "+<CMD>:0" when it accepted it. Up to 3 tries:
 // at boot the first answer sometimes came back garbled ("+DOOERPOR"), and then the frequency could be
 // left unprogrammed without anyone noticing.
@@ -3207,7 +3237,10 @@ static bool sa868Cmd(const char *cmd, const char *what)
         while (SerialRF.available() > 0)
             SerialRF.read();
         SerialRF.print(cmd);
-        if (SA868_waitResponse(data, "\r\n", 1500))
+        rfLogAdd('>', cmd);
+        bool got = SA868_waitResponse(data, "\r\n", 1500);
+        rfLogAdd('<', got ? data.c_str() : "(no answer)");
+        if (got)
         {
             int c = data.indexOf(':');
             if (data.startsWith("+") && c > 0 && data.charAt(c + 1) == '0')
@@ -3230,7 +3263,10 @@ String SA868_getVERSION()
     int rssi;
 
     SerialRF.printf("AT+VERSION\r\n");
-    if (SA868_waitResponse(data, "\r\n", 1000))
+    rfLogAdd('>', "AT+VERSION");
+    bool got = SA868_waitResponse(data, "\r\n", 1000);
+    rfLogAdd('<', got ? data.c_str() : "(no answer)");
+    if (got)
     {
         String version = data.substring(0, data.indexOf("\r\n"));
         return version;
@@ -3431,7 +3467,7 @@ static void RF_MODULE_locked(bool boot, uint32_t pdOffMs)
     delay(pdOffMs ? pdOffMs : boot ? SA868_PD_OFF_BOOT_MS : 500); // longer at boot: see SA868_PD_OFF_BOOT_MS
     if (boot && !rfSerialStarted)
     {
-        SerialRF.begin(config.rf_baudrate, EspSoftwareSerial::SWSERIAL_8N1, config.rf_rx_gpio, config.rf_tx_gpio);
+        SerialRF.begin(config.rf_baudrate, SERIAL_RF_FORMAT, config.rf_rx_gpio, config.rf_tx_gpio);
         SerialRF.setTimeout(10);
         rfSerialStarted = true;
     }
