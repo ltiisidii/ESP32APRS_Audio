@@ -59,6 +59,7 @@ extern int mVrms;                     // AFSK.cpp: RMS level of the last audio b
 extern volatile uint32_t adcIsrCount; // AFSK.cpp: ADC samples taken
 extern String rfRssiRaw;
 extern String rfInitError;
+extern volatile uint16_t rfRecoveries; // main.cpp: SA868 found deaf and set up again
 extern volatile bool bootArmed; // main.cpp: BOOT button seen released since boot
 bool bootPressed();
 extern const char *volatile rfRssiState;
@@ -123,6 +124,25 @@ static void sendJson(AsyncWebServerRequest *request, JsonDocument &doc, int code
     request->send(res);
 }
 
+// What started the chip this time, from the ESP32 itself (a power cut and a software restart look alike otherwise)
+static const char *resetCauseText()
+{
+    switch (esp_reset_reason())
+    {
+    case ESP_RST_POWERON: return "power on";
+    case ESP_RST_EXT: return "reset pin";
+    case ESP_RST_SW: return "software (update, reboot or supervisor)";
+    case ESP_RST_PANIC: return "crash";
+    case ESP_RST_INT_WDT: return "interrupt watchdog";
+    case ESP_RST_TASK_WDT: return "task watchdog";
+    case ESP_RST_WDT: return "watchdog";
+    case ESP_RST_DEEPSLEEP: return "deep sleep wake-up";
+    case ESP_RST_BROWNOUT: return "brownout (supply voltage dropped)";
+    case ESP_RST_SDIO: return "SDIO";
+    default: return "unknown";
+    }
+}
+
 static void apiInfo(AsyncWebServerRequest *request)
 {
     if (!authOk(request))
@@ -140,6 +160,7 @@ static void apiInfo(AsyncWebServerRequest *request)
         doc["vbat"] = serialized(String(VBat, 2));
     doc["uptime"] = (uint32_t)(millis64() / 1000);
     doc["lastRestart"] = supervisorLastRestart(); // "" unless the supervisor forced the last restart
+    doc["resetCause"] = resetCauseText();          // why the ESP32 started: power on, software, watchdog, brownout...
     doc["loopStage"] = (const char *)loopStage;    // where the Arduino loop() is (OLED, BOOT button)
     doc["bootPin"] = bootPressed() ? "pressed" : "released"; // BOOT button / GPIO0 as the firmware reads it
     doc["bootArmed"] = bootArmed;
@@ -212,6 +233,7 @@ static void apiInfo(AsyncWebServerRequest *request)
         r["txFreq"] = serialized(String(config.freq_tx, 4));
         r["rxFreq"] = serialized(String(config.freq_rx, 4));
         r["power"] = config.rf_power ? "HIGH" : "LOW";
+        r["recoveries"] = rfRecoveries; // SA868 found deaf (squelch open, silent) and set up again by itself
         r["initError"] = rfInitError; // "" = the module accepted frequency, filters and volume
         if (rfRssi >= 0)
             r["rssi"] = rfRssi; // raw 0..255 from the SA868, read every 5 s

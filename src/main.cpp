@@ -3314,12 +3314,28 @@ String ctcssToHex(unsigned int decValue, int section)
     }
 }
 
-static void RF_MODULE_locked(bool boot);
+static void RF_MODULE_locked(bool boot, uint32_t pdOffMs = 0);
 void RF_MODULE(bool boot)
 {
     xSemaphoreTake(rfUartLock, portMAX_DELAY);
     RF_MODULE_locked(boot);
     xSemaphoreGive(rfUartLock);
+}
+
+extern bool sqlActive; // AFSK.cpp: squelch line open (read on every poll)
+extern int mVrms;      // AFSK.cpp: RMS level of the last audio block, mV
+volatile uint16_t rfRecoveries = 0; // times the SA868 was found deaf and set up again since boot
+
+// "Deaf" SA868: squelch line open while the audio is silent. A working module opens its squelch only with a
+// signal or noise, and both are loud at the ADC (tens to hundreds of mV); silence with an open squelch is the
+// stuck state. Needs the SQL GPIO wired (SA868 boards: GPIO33).
+#define SA868_DEAF_AUDIO_MV 8   // below this with the squelch open = silent
+#define SA868_DEAF_POLLS 6      // 6 polls x 5 s = 30 s in that state before acting
+static const uint32_t sa868RecoverPdMs[] = {3000, 5000, 10000}; // power-down time per attempt, then it repeats the last
+
+static bool sa868LooksDeaf()
+{
+    return config.rf_sql_gpio > -1 && sqlActive && mVrms < SA868_DEAF_AUDIO_MV && !getTransmit();
 }
 
 // Every 5 s, at low priority, when the module is an SA868 and is not transmitting. It never waits for the
@@ -3351,6 +3367,22 @@ static void rfRssiTask(void *)
         xSemaphoreGive(rfUartLock);
         rfRssi = v > 0 ? v : -1;
         rfRssiState = v > 0 ? "ok" : "no answer";
+
+        // 30 s in the deaf state the first time, then twice as long after each recovery (up to 32 min): a board whose
+        // RX audio is set far too low must not have its receiver restarted every 30 s
+        static uint16_t deafPolls = 0;
+        deafPolls = sa868LooksDeaf() ? deafPolls + 1 : 0;
+        if (deafPolls >= (uint16_t)(SA868_DEAF_POLLS << (rfRecoveries < 6 ? rfRecoveries : 6)))
+        {
+            uint8_t n = rfRecoveries < 3 ? rfRecoveries : 2;
+            log_e("SA868 deaf (squelch open, audio %d mV, RSSI %d): power-down %u ms and setup again", mVrms, v, (unsigned)sa868RecoverPdMs[n]);
+            rfRssiState = "recovering module";
+            xSemaphoreTake(rfUartLock, portMAX_DELAY);
+            RF_MODULE_locked(true, sa868RecoverPdMs[n]);
+            xSemaphoreGive(rfUartLock);
+            rfRecoveries++;
+            deafPolls = 0;
+        }
     }
 }
 
@@ -3361,7 +3393,14 @@ void rfRssiStart()
         started = xTaskCreate(rfRssiTask, "rfRssi", 3072, nullptr, 1, nullptr) == pdPASS;
 }
 
-static void RF_MODULE_locked(bool boot)
+// SA868 after a software restart of the ESP32 (web update, supervisor, Reboot button): the module never lost
+// power and could stay "deaf" - squelch line open, audio silent, low RSSI - although it accepted every setting.
+// Only a real power cycle brought it back. It is now kept powered down (PD) longer before the setup, and
+// rfRssiTask() watches for that state and repeats the power-down + setup by itself (sa868Recover()).
+#define SA868_PD_OFF_BOOT_MS 2000
+static bool rfSerialStarted = false;
+
+static void RF_MODULE_locked(bool boot, uint32_t pdOffMs)
 {
     String data;
     if (config.rf_en == false)
@@ -3389,11 +3428,12 @@ static void RF_MODULE_locked(bool boot)
     // digitalWrite(config.rf_ptt_gpio, !config.rf_ptt_active); // PTT HIGH
     pinModeSafe(config.rf_pd_gpio, OUTPUT);
     digitalWrite(config.rf_pd_gpio, !config.rf_pd_active); // PD LOW
-    delay(500);
-    if (boot)
+    delay(pdOffMs ? pdOffMs : boot ? SA868_PD_OFF_BOOT_MS : 500); // longer at boot: see SA868_PD_OFF_BOOT_MS
+    if (boot && !rfSerialStarted)
     {
         SerialRF.begin(config.rf_baudrate, EspSoftwareSerial::SWSERIAL_8N1, config.rf_rx_gpio, config.rf_tx_gpio);
         SerialRF.setTimeout(10);
+        rfSerialStarted = true;
     }
     digitalWrite(config.rf_pd_gpio, config.rf_pd_active); // PD HIGH
 

@@ -216,6 +216,7 @@ async function dashboard(main) {
         r.rssi !== undefined && ['RSSI', rssiText(r.rssi)],
         r.rf && ['Module', (r.version ? '<span class="ok">' + esc(String(r.version).replace(/^\+?VERSION:/i, '')) + '</span>' : '<span class="warn">no answer</span>') +
           (r.initError ? ' <span class="bad">config FAILED: ' + esc(r.initError) + '</span>' : (r.version ? ' <span class="muted">&middot; config OK</span>' : ''))],
+        r.recoveries > 0 && ['Module recovered', '<span class="warn">' + r.recoveries + ' time' + (r.recoveries > 1 ? 's' : '') + '</span> <span class="muted">(found deaf, set up again)</span>'],
         ['Modem', esc(r.modem)],
         ['FX.25', esc(r.fx25)],
       ])) +
@@ -228,6 +229,7 @@ async function dashboard(main) {
       ])) +
       card('System', rows([
         ['Firmware', esc(i.version)],
+        i.resetCause && ['Last start', esc(i.resetCause) + (i.lastRestart ? ' <span class="warn">&middot; supervisor: ' + esc(i.lastRestart) + '</span>' : '')],
         ['Chip', esc(i.chip) + ' @ ' + i.cpuMhz + ' MHz'],
         ['RAM free', kb(i.heap) + ' / ' + kb(i.heapSize) + ' (min ' + kb(i.heapMin) + ')' + bar(i.heapSize - i.heap, i.heapSize)],
         i.psramSize && ['PSRAM free', kb(i.psram) + ' / ' + kb(i.psramSize)],
