@@ -7,7 +7,19 @@ const ICONS = 'https://aprs.p00lack.cc/symbols/icons/';
 
 // fetch() for /api/*: a 401 means the browser no longer sends the login (it drops it after long idle
 // periods); show one notice with a reload button instead of failing silently
-async function apiFetch(path, opts) {
+//
+// One /api request at a time per page: the station builds each JSON answer in memory and keeps it until it is
+// sent, so a page asking for several at once (config + meta, info + lastheard...) made its free heap dip far
+// below normal. The next request starts when the previous answer has arrived completely.
+let apiQueue = Promise.resolve();
+function apiFetch(path, opts) {
+  const run = () => apiFetchNow(path, opts);
+  const p = apiQueue.then(run, run);
+  apiQueue = p.then((r) => r.clone().arrayBuffer()).catch(() => {});
+  return p;
+}
+
+async function apiFetchNow(path, opts) {
   let r;
   for (let attempt = 1; ; attempt++) {
     r = await fetch(path, opts);

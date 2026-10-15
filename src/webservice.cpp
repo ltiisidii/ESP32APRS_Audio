@@ -97,9 +97,11 @@ static void jsonEscapeCopy(char *dest, size_t destSize, const char *src)
 	dest[j] = '\0';
 }
 
-// Last heard list as JSON for GET /api/lastheard. Runs only in the web server task, so the big work
-// buffers are static (they would not fit its 8 KB stack).
-String lastHeardJson()
+// Last heard list as JSON for GET /api/lastheard, written row by row into the response. It used to build the
+// whole list in a 16 KB buffer, copy it to a String and copy that again into the response (about 35 KB at
+// once with a full list): that peak, with other pages loading at the same time, took the free heap below the
+// 50 KB restart limit. Runs only in the web server task, so the work buffers are static (8 KB stack).
+void lastHeardJson(Print &out)
 {
 	static struct pbuf_t aprs;
 	static ParseAPRS aprsParse;
@@ -108,26 +110,19 @@ String lastHeardJson()
 	// Using dynamic memory allocation instead of String
 	// Sized to fit a fully-escaped path/LPath (up to 256 raw chars -> 512 escaped) plus JSON key/quote overhead
 	static char temp_html[600];
-	// 16 KB working buffer: PSRAM when the board has it, else the normal heap
-	char *html = nullptr;
-#ifdef BOARD_HAS_PSRAM
-	html = (char *)ps_calloc(16384, 1);
-#endif
-	if (!html)
-		html = (char *)calloc(16384, 1);
-	if (html==nullptr)
-	{
-		return String("[]"); // memory allocation failed
-	}
+	// one row (one station) at a time: the longest one, with an escaped 256-character path, is about 1 KB
+	static char html[2048];
+	bool first = true;
 	time_t timeNow = time(NULL);
 
 	// log_d("Create html last heard");
 	localtime_r(&timeNow, &tmNow);
 //strcat(webString, "  { time: \"21:54:23\", icon: \"91-1.png\", callsign: \"HS5TQA-7\", path: \"RF: WIDE1-1\", dx: 0.0, packet: 2, audio: -19.6 },\n");
-	strcpy(html, "[");
+	out.print('[');
 	static char pkgRaw[512];
 	for (int i = 0; i < PKGLISTSIZE; i++)
 	{
+		html[0] = 0;
 		if (i >= PKGLISTSIZE)
 			break;
 		pkgListType pkg = getPkgList(i, pkgRaw, sizeof(pkgRaw));
@@ -370,7 +365,7 @@ String lastHeardJson()
 						cmt[n] = 0;
 						jsonEscapeCopy(cmt_esc, sizeof(cmt_esc), cmt);
 						snprintf(temp_html, sizeof(temp_html), "\"comment\":\"%s\",", cmt_esc);
-						if (strlen(html) + strlen(temp_html) + 400 < 16384)
+						if (strlen(html) + strlen(temp_html) + 400 < sizeof(html))
 							strcat(html, temp_html);
 					}
 					snprintf(temp_html, sizeof(temp_html), "\"packet\":\"%d\",", packet);
@@ -402,14 +397,18 @@ String lastHeardJson()
 				}
 			}
 		}
+		size_t n = strlen(html);
+		if (n > 1)
+		{
+			if (html[n - 1] == ',')
+				html[n - 1] = 0; // each row ends with "},"
+			if (!first)
+				out.print(',');
+			out.print(html);
+			first = false;
+		}
 	}
-	html[strlen(html) - 1] = '\0'; // Remove the last comma
-	if (html[0] == '[')
-	strcat(html, "]");
-
-	String out = html[0] == '[' ? String(html) : String("[]");
-	free(html);
-	return out;
+	out.print(']');
 }
 
 // Message list as JSON for the web UI: [{t, call, id, text, ack, rx}], newest first.
