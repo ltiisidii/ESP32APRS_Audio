@@ -222,6 +222,7 @@ async function dashboard(main) {
         ['Digi', s.digi + ' (duplicates dropped ' + s.dup + ')'],
         ['Drop / error', s.drop + ' / ' + s.error],
         s.fx25 !== undefined && ['FX.25 RX', s.fx25 + ' (repaired ' + s.fx25Fix + ')'],
+        s.kiss && ['KISS TCP', (s.kiss.client ? 'client connected' : 'no client') + ', frames from it ' + s.kiss.in + ' (sent on RF ' + s.kiss.tx + ')'],
       ])) +
       card('Radio', rows([
         r.rf && ['Freq TX', Number(r.txFreq).toFixed(3) + ' MHz'],
