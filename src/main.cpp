@@ -6056,28 +6056,7 @@ void sendTelemetry_0(char *raw, bool header)
     if (config.tlm0_2inet)
         SendMode |= INET_CHANNEL;
     pkgTxPush(str, strlen(str), 0, SendMode);
-
-#if 1
-    if (config.tlm0_2rf)
-    { // TLM SEND TO RF
-        SendMode |= RF_CHANNEL;
-        // char *rawP = (char *)malloc(rawData.length());
-        //  rawData.toCharArray(rawP, rawData.length());
-        // memcpy(rawP, rawData.c_str(), rawData.length());
-        pkgTxPush(str, strlen(str), 0, RF_CHANNEL);
-        // pushTxDisp(TXCH_RF, "TX DIGI POS", sts);
-        // free(rawP);
-    }
-    if (config.tlm0_2inet)
-    { // TLM SEND TO APRS-IS
-
-        if (aprsIsSendLine(str, strlen(str))) // Send packet to Inet
-        {
-            status.txInetCount++; // not a transmission on RF
-            // pushTxDisp(TXCH_TCP, "TX DIGI POS", sts);
-        }
-    }
-#endif
+    // (it was also sent a second time here, straight to RF and to APRS-IS: every telemetry packet went out twice)
 }
 
 void sendTelemetry_trk(char *raw)
