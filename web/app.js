@@ -164,7 +164,7 @@ async function dashboard(main) {
       const icon = /^(\d{2,3}-[12]|dot)\.png$/.test(r.icon) ? '<img src="' + ICONS + r.icon + '" alt="" width="20" height="20" loading="lazy">' : '';
       const audio = r.audio && r.audio !== '-' ? '<span class="' + vuClass(parseFloat(r.audio)) + '">' + esc(r.audio) + ' dBV</span>' : '-';
       return '<tr><td>' + esc(r.time) + '</td><td class="ic">' + icon + '</td><td><b>' + aprsLink(r.callsign) + '</b></td><td class="path">' +
-        esc(r.path) + '</td><td class="cmt" title="' + esc(r.comment || '') + '">' + esc(r.comment || '') + '</td><td>' + esc(r.dx || '-') + '</td><td>' + esc(r.packet) + '</td><td>' + audio + '</td></tr>';
+        esc(r.path).replace(/,/g, ',<wbr>') + '</td><td class="cmt" title="' + esc(r.comment || '') + '">' + esc(r.comment || '') + '</td><td>' + esc(r.dx || '-') + '</td><td>' + esc(r.packet) + '</td><td>' + audio + '</td></tr>';
     }).join('');
     $('#lh').innerHTML = '<thead><tr>' + head + '</tr></thead><tbody>' +
       (body || '<tr><td colspan="8" class="muted">No stations heard yet</td></tr>') + '</tbody>';

@@ -49,7 +49,7 @@ table.list{width:100%;border-collapse:collapse;white-space:nowrap}
 .list tbody tr:hover{background:#1d232b}
 .list td.ic{padding:1px 4px;width:24px}
 .list td.ic img{display:block}
-.list td.path{white-space:normal;word-break:break-all;color:var(--muted)}
+.list td.path{white-space:normal;overflow-wrap:anywhere;color:var(--muted)}
 .list td.cmt{max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
 .tags{display:flex;flex-wrap:wrap;gap:5px;padding:8px 10px 0}
 .tags:last-of-type{padding-bottom:8px}
