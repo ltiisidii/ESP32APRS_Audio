@@ -374,6 +374,8 @@ Changes made to the original V1.8 firmware (commit `9a41b72`), grouped by topic.
 - **1.8b**: first release of this fork (stability, new web interface, objects, SA868 support).
 - **1.8c**: SA868 receives after updates and restarts, APRS-IS heap fragmentation fixed, safe BOOT button, radio
   and Internet TX counted apart.
+- **1.8d**: KISS over TCP (off by default, RX only unless TX is allowed), Internet -> RF rules with a log-only test,
+  FX.25 counter, iGate uploads no longer counted as radio TX, path column and About page fixes.
 
 ## APRS Server service
 
