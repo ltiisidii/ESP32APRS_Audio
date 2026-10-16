@@ -291,6 +291,13 @@ Changes made to the original V1.8 firmware (commit `9a41b72`), grouped by topic.
 - Web server hardened: survives bursts of parallel requests and refuses new work when memory is low instead of crashing.
 - ESP32 with the PTT on GPIO32 (ESP32DR SA868): configuring the PTT also turned GPIO0 (BOOT) into an output held
   low, so the long-press actions fired by themselves and the main loop froze. Fixed.
+- SA868 deaf after a firmware update or a software restart: the board now always starts with a full reset, so the
+  module receives again without a power cycle.
+- APRS-IS no longer breaks the heap into small pieces (the web stopped answering after hours with a busy filter);
+  the supervisor restarts the station if the largest free block stays too small, and the web shows it.
+- Lower memory peak when web pages load.
+- BOOT button safe for an unattended station: the long press restarts instead of powering off, turns WiFi off for
+  10 minutes only, and sends no manual beacon when the tracker is off.
 
 **Radio and modem**
 - Modem, AX.25 and parser bugs fixed (found with the host tests and static analysis).
@@ -303,13 +310,24 @@ Changes made to the original V1.8 firmware (commit `9a41b72`), grouped by topic.
 - Dashboard with last heard (comment/data column, aprs.fi links, audio level colours), TNC2 terminal with an audio
   level meter, GPS and messages; a "session expired" notice instead of a surprise login box.
 - OLED: screens rotate by themselves (configurable), showing only the screens that apply to the station.
+- Statistics: "Packet TX (radio)" counts only RF transmissions; packets sent to APRS-IS are counted apart
+  ("Sent to Internet", "RF→INET").
 
 **Defaults**
 - Thailand-specific defaults replaced by neutral ones (worldwide APRS-IS server, `pool.ntp.org`, generic AP name).
 
+**Code and build**
+- Every comment in the firmware sources in English.
+- GitHub Actions builds the 13 firmwares on every change; a version tag creates a draft release with the files.
+
 **Testing**
 - Host tests that run the real firmware code on a PC (AddressSanitizer/UBSan), interoperability tests against
   Dire Wolf in every modem mode, WA8LMF TNC Test CD results and a hardware test plan. All 13 environments build.
+
+**Releases**
+- **1.8b**: first release of this fork (stability, new web interface, objects, SA868 support).
+- **1.8c**: SA868 receives after updates and restarts, APRS-IS heap fragmentation fixed, safe BOOT button, radio
+  and Internet TX counted apart.
 
 ## APRS Server service
 
