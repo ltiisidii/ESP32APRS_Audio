@@ -105,9 +105,12 @@ jobs:
             dist/*.bin
             dist/SHA256SUMS.txt
           body: |
-            Firmware for every supported board. Pick the files of your board:
-            - `<board>-update.bin`: for the web page (About / System: Firmware update) or OTA.
-            - `<board>-full.bin`: first install by USB, written at 0x0
-              (`esptool.py write_flash 0x0 <board>-full.bin`). Settings stored on the board are kept;
-              to start clean, erase the flash first (`esptool.py erase_flash`).
+            Firmware for every supported board. Pick the two files of your board:
+            - `<board>-update.bin`: to update a board that already runs this firmware, from its
+              web page (About → Firmware update). Settings are kept. If the new firmware does not
+              start properly, the board goes back to the previous one by itself.
+            - `<board>-full.bin`: first install by USB (a new board, another firmware, or a board
+              that does not start): `esptool.py write_flash 0x0 <board>-full.bin`.
+              Settings stored on the board are kept; to start clean, run `esptool.py erase_flash` first.
+
             `SHA256SUMS.txt` lists the checksum of every file.
