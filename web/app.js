@@ -221,6 +221,7 @@ async function dashboard(main) {
         ['INET &rarr; RF', s.inet2rf],
         ['Digi', s.digi + ' (duplicates dropped ' + s.dup + ')'],
         ['Drop / error', s.drop + ' / ' + s.error],
+        s.fx25 !== undefined && ['FX.25 RX', s.fx25 + ' (repaired ' + s.fx25Fix + ')'],
       ])) +
       card('Radio', rows([
         r.rf && ['Freq TX', Number(r.txFreq).toFixed(3) + ' MHz'],
