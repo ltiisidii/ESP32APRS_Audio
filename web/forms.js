@@ -352,6 +352,8 @@ pages.igate = (main) => formPage(main, (cfg, meta) => ({
         { k: 'rf2inetFilter', l: 'RF &rarr; Internet types', t: 'bits', o: FILTERS.concat([[32768, 'ALL']]) },
         { k: 'inet2rf', l: 'Internet &rarr; RF', t: 'sw' },
         { k: 'inet2rfFiltger', l: 'Internet &rarr; RF types', t: 'bits', o: FILTERS },
+        { k: 'inet2rfLog', l: 'Internet &rarr; RF test', t: 'sw', h: 'Log what would go to RF and why, transmit nothing (with Internet &rarr; RF off)' },
+        { k: 'inet2rfRate', l: 'Internet &rarr; RF per minute', t: 'num', min: 1, max: 16, h: 'At most this many packets a minute' },
         { k: 'igateTime', l: 'Time stamp', t: 'sw' },
       ],
     },
