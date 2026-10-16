@@ -243,6 +243,7 @@ async function dashboard(main) {
         i.resetCause && ['Last start', esc(i.resetCause) + (i.lastRestart ? ' <span class="warn">&middot; supervisor: ' + esc(i.lastRestart) + '</span>' : '')],
         ['Chip', esc(i.chip) + ' @ ' + i.cpuMhz + ' MHz'],
         ['RAM free', kb(i.heap) + ' / ' + kb(i.heapSize) + ' (min ' + kb(i.heapMin) + ')' + bar(i.heapSize - i.heap, i.heapSize)],
+        i.heapBlock !== undefined && ['Largest block', kb(i.heapBlock) + ' <span class="muted">(min ' + kb(i.heapBlockMin) + '; small = memory in pieces)</span>'],
         i.psramSize && ['PSRAM free', kb(i.psram) + ' / ' + kb(i.psramSize)],
         ['Storage', kb(i.fsUsed) + ' / ' + kb(i.fsTotal) + bar(i.fsUsed, i.fsTotal)],
         i.vbat !== undefined && ['Battery', i.vbat + ' V'],
