@@ -226,7 +226,8 @@ built by GitHub Actions from this repository: `<board>-full.bin` for the first i
 - 3.Connect to the WiFi access point **ESP32APRS_Audio** (password `esp32aprs`) and open http://192.168.4.1.
   The web login is `admin` / `admin`. **Change both passwords after the first login** (System and WiFi pages).
 - 4.**BOOT** button: a short press shows the next OLED screen. Holding it more than 2 s does the action of the screen
-  shown (STATISTIC: send the tracker position now; WiFi: WiFi off/on; SYSTEM: power off). Holding it at the end of
+  shown (STATISTIC: send the tracker position now, only with the tracker on; WiFi: WiFi off for 10 minutes, or back
+  on; SYSTEM: restart). Holding it at the end of
   the 3-second countdown at power-on restores the factory defaults.
 
 ![ESP32Tool](image/ESP32Tool.png)

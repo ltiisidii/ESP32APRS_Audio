@@ -3016,7 +3016,8 @@ bool pkgTxSend()
                         txQueue[i].Channel &= ~INET_CHANNEL;
                         psramUnlock();
 
-                        aprsIsSendLine(infoTmp, lenTmp); // Send packet to APRS-IS (aprsc)
+                        if (aprsIsSendLine(infoTmp, lenTmp)) // Send packet to APRS-IS (aprsc)
+                            status.txInetCount++;
                         log_d("TX->INET: %s", infoTmp);
 
                         psramLock();
@@ -5548,6 +5549,8 @@ int nmea_idx = 0;
 bool save_mode = false;
 bool save_act = false;
 bool manualWiFi = false;
+#define WIFI_BUTTON_OFF_MS 600000ULL // WiFi turned off with the BOOT button comes back after 10 minutes
+static uint64_t wifiOffUntil = 0;
 
 #ifndef GUI_LCD
 extern const char *volatile loopStage;
@@ -5668,17 +5671,21 @@ void loop()
             }
             else if (curTab == 4) // System display
             {
-                msgBox("POWER OFF");
+                // It used to be POWER OFF (deep sleep): an unattended station stayed dead until someone went up
+                // to it. A restart instead (a full reset, the radio comes back).
+                msgBox("RESTART");
                 waitBootRelease();
-                // PowerOff();
-                esp_deep_sleep_start();
+                delay(500);
+                ESP.restart();
             }
             else if (curTab == 6) // Wifi display
             {
-                if (manualWiFi)
+                if (wifiOffUntil == 0)
                 {
+                    // WiFi off for a while only: left off, the station could not be reached any more
+                    wifiOffUntil = millis64() + WIFI_BUTTON_OFF_MS;
                     manualWiFi = false;
-                    msgBox("WiFi OFF");
+                    msgBox("WiFi OFF 10 min");
                     vTaskSuspend(taskNetworkHandle);
                     WiFi.disconnect(true); // Disconnect from the network
                     WiFi.persistent(false);
@@ -5686,6 +5693,7 @@ void loop()
                 }
                 else
                 {
+                    wifiOffUntil = 0;
                     manualWiFi = true;
                     msgBox("WiFi ON");
                     vTaskResume(taskNetworkHandle);
@@ -5694,10 +5702,18 @@ void loop()
             }
             else if (curTab == 1) // Status display
             {
-                msgBox("MANUAL TX");
-                waitBootRelease();
-                EVENT_TX_POSITION = 6;
-                tx_interval = config.trk_interval;
+                if (config.trk_en)
+                {
+                    msgBox("MANUAL TX");
+                    waitBootRelease();
+                    EVENT_TX_POSITION = 6;
+                    tx_interval = config.trk_interval;
+                }
+                else
+                {
+                    msgBox("TX OFF"); // tracker off: nothing to send (it stayed pending and went out once enabled)
+                    waitBootRelease();
+                }
             }
         }
         else
@@ -5846,6 +5862,13 @@ void loop()
     {
         loopStage = "save objects";
         saveConfiguration("/default.cfg", config);
+    }
+
+    if (wifiOffUntil && millis64() >= wifiOffUntil)
+    { // the 10 minutes of "WiFi OFF" from the BOOT button are over
+        wifiOffUntil = 0;
+        manualWiFi = true;
+        vTaskResume(taskNetworkHandle);
     }
 
     // Tick one secound
@@ -6042,7 +6065,7 @@ void sendTelemetry_0(char *raw, bool header)
 
         if (aprsIsSendLine(str, strlen(str))) // Send packet to Inet
         {
-            status.txCount++;
+            status.txInetCount++; // not a transmission on RF
             // pushTxDisp(TXCH_TCP, "TX DIGI POS", sts);
         }
     }

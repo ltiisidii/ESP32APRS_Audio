@@ -274,7 +274,8 @@ static void apiInfo(AsyncWebServerRequest *request)
     JsonObject s = doc["stats"].to<JsonObject>();
     s["rx"] = status.rxCount;
     s["pkt"] = status.allCount;
-    s["tx"] = status.txCount;
+    s["tx"] = status.txCount;          // transmitted on RF
+    s["txInet"] = status.txInetCount;  // sent to APRS-IS
     s["digi"] = status.digiCount;
     s["rf2inet"] = status.rf2inet;
     s["inet2rf"] = status.inet2rf;

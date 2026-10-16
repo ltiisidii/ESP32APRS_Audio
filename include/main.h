@@ -286,7 +286,8 @@ typedef struct statisticStruct
 	uint32_t dropCount;
 	uint32_t rf2inet;
 	uint32_t inet2rf;
-	uint32_t txCount;
+	uint32_t txCount;     // packets transmitted on RF
+	uint32_t txInetCount; // packets of this station sent to APRS-IS (beacons, telemetry...)
 	uint32_t rxCount;
 	uint32_t dupCount;
 } statusType;
