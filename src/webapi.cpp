@@ -32,6 +32,7 @@
 #include "webfeed.h"
 #include "supervisor.h"
 #include "objects.h"
+#include "kisstcp.h"
 #include "sensor.h"
 #include "wireguard_vpn.h"
 #include "esp_wifi.h"
@@ -284,6 +285,15 @@ static void apiInfo(AsyncWebServerRequest *request)
     s["error"] = status.errorCount;
     s["fx25"] = status.fx25Count;       // received as FX.25
     s["fx25Fix"] = status.fx25FixCount; // ... and repaired by FX.25
+    if (config.kiss_tcp_en)
+    {
+        uint32_t in, sent;
+        kissTcpCounts(in, sent);
+        JsonObject k = s["kiss"].to<JsonObject>();
+        k["client"] = kissTcpConnected();
+        k["in"] = in;     // data frames sent by the client
+        k["tx"] = sent;   // ... of them transmitted on RF
+    }
     sendJson(request, doc);
 }
 

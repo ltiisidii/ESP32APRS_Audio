@@ -7145,6 +7145,7 @@ void taskAPRS(void *pvParameters)
         // if (now > timeSlot)
         // {
         // Transmit in timeslot if enabled
+        kissTcpTxPoll(); // frames from a KISS over TCP client allowed to transmit
         pkgTxSend();
         Ax25TransmitBuffer(); // transmit buffer (will return if nothing to be transmitted)
         Ax25TransmitCheck();  // check for pending transmission request
