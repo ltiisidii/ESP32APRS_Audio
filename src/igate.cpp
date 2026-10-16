@@ -273,7 +273,7 @@ int igateProcess(AX25Msg &Packet)
         Raw[i] = 0;
         log_d("RF2INET: %s", Raw);
         aprsIsSendLine((const char *)Raw, i); // Send packet to APRS-IS (aprsc)
-        status.txCount++;
+        // not counted in txCount (radio TX): the caller already counts it as rf2inet
         free(Raw);
         log_d("Send TCP Finish!");
     }
