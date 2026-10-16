@@ -216,25 +216,71 @@ for Handheld
 ![HT-RX](image/ESP32DR_RxOnly.png)
 
 
-## ESP32APRS_Audio firmware installation (do it first time, next time via the web browser)
-Ready-made firmware for every board is on the [Releases](https://github.com/ltiisidii/ESP32APRS_Audio/releases) page,
-built by GitHub Actions from this repository: `<board>-full.bin` for the first install by USB (write it at 0x0) and
-`<board>-update.bin` for later updates from the web page.
+## Getting started
 
-- 1.Connect the USB cable to the ESP32 Module.
-- 2.Download firmware and open the program ESP32 DOWNLOAD TOOL, set it in the firmware upload program, set the firmware to ESP32_Vxx.bin, location 0x10000 and partitions.bin at 0x8000 and bootloader.bin at 0x1000 and boot.bin at 0xe000, if not loaded, connect GPIO0 cable to GND, press START button finished, press power button or reset (red) again.
-- 3.Connect to the WiFi access point **ESP32APRS_Audio** (password `esp32aprs`) and open http://192.168.4.1.
-  The web login is `admin` / `admin`. **Change both passwords after the first login** (System and WiFi pages).
-- 4.**BOOT** button: a short press shows the next OLED screen. Holding it more than 2 s does the action of the screen
-  shown (STATISTIC: send the tracker position now, only with the tracker on; WiFi: WiFi off for 10 minutes, or back
-  on; SYSTEM: restart). Holding it at the end of
-  the 3-second countdown at power-on restores the factory defaults.
+### 1. Pick the file for your board
+Every release on the [Releases](https://github.com/ltiisidii/ESP32APRS_Audio/releases) page has two files per board:
+`<board>-full.bin` (first install by USB) and `<board>-update.bin` (updates from the web page).
 
-![ESP32Tool](image/ESP32Tool.png)
+| Your board | Files |
+|---|---|
+| ESP32DR SA868 or ESP32DR Simple (ESP32 DevKit v1) with a 1.3" SH1106 OLED | `esp32-sh1106` |
+| ESP32 DevKit v1 with a 0.96" SSD1306 OLED | `esp32-ssd1306` |
+| ESP32 DevKit v1 without a display | `esp32-nodisp` |
+| ESP32-C3 with an SH1106 / SSD1306 OLED, or without a display | `esp32c3-sh1106`, `esp32c3-ssd1306`, `esp32c3-nodisp` |
+| ESP32-S3 DevKitC (8 MB flash) with an SH1106 OLED | `esp32s3-sh1106` |
+| ESP32-S3 N16R8 (16 MB flash, 8 MB PSRAM) | `esp32s3-N16R8` |
+| LilyGO T-TWR | `TTGO-TWR` |
+| ESP32-C6 | `esp32c6` |
+| `esp32-NOOTA`, `esp32c3-NOOTA`, `esp32s3-NOOTA` | Same boards, one large firmware slot instead of two: no updates from the web page and no automatic return to the previous firmware. Updates only by USB. Use them only if you know you need them. |
 
-## ESP32 Flash Download Tools
-https://www.espressif.com/en/support/download/other-tools
+### 2. First install (USB)
+Use this for a new board, a board with another firmware, or a board that does not start any more.
+Connect the board by USB and write `<board>-full.bin` at address **0x0**. It holds everything (bootloader,
+partition table and firmware), so there is only one file to write.
 
+- In the browser (Chrome or Edge): open [ESP Tool](https://espressif.github.io/esptool-js/), *Connect*, choose
+  the port, add the file at address `0x0` and press *Program*.
+- Or from the command line:
+  `esptool.py write_flash 0x0 esp32-sh1106-full.bin`
+- Or with the Espressif [Flash Download Tool](https://www.espressif.com/en/support/download/other-tools): one file,
+  `<board>-full.bin`, at `0x0`.
+
+If the port does not answer, hold the **BOOT** button (GPIO0 to GND) while it connects.
+Settings already stored on the board are kept. To start clean, erase the flash first (`esptool.py erase_flash`,
+or *Erase Flash* in ESP Tool).
+
+### 3. First setup
+1. Join the WiFi access point **ESP32APRS_Audio** (password `esp32aprs`) and open http://192.168.4.1.
+   The web login is `admin` / `admin`.
+2. **Change both passwords**: the web login on the **System** page and the access point on the **WiFi** page.
+3. **WiFi**: add your network under *Client*, so the station reaches the Internet (APRS-IS, time).
+4. **Radio**: frequency (144.390 MHz in most of the Americas, 144.800 MHz in Europe), and check the audio levels.
+5. Turn on what the station does: **iGate** (callsign with SSID and server; the APRS-IS passcode is computed by the station), **Digipeater**, **Tracker**,
+   **Weather**, **Telemetry**, **Objects**. Each page explains its settings.
+6. Watch the **Dashboard**: the last heard list, the audio level of each packet and the counters show whether
+   it receives well.
+
+The **BOOT** button: a short press shows the next OLED screen. Holding it more than 2 s does the action of the
+screen shown (STATISTIC: send the tracker position now, only with the tracker on; WiFi: WiFi off for 10 minutes,
+or back on; SYSTEM: restart). Holding it at the end of the 3-second countdown at power-on restores the factory
+defaults.
+
+### 4. Updating
+On the **About** page, *Firmware update*: choose `<board>-update.bin` and *Upload and install*. The settings are
+kept. The new firmware must run well for 2 minutes; if it fails to start or keeps restarting, the board goes back
+to the previous firmware by itself. Each release lists its changes; versions can be skipped (1.8b to 1.8d is fine).
+
+### 5. Coming from the original firmware (nakhonthai V1.8)
+This fork keeps the same flash layout and the same settings file (`/default.cfg`), so you can update from the
+original firmware's web update page with `<board>-update.bin` and keep your settings. Settings that did not exist
+in the original (APRS objects, KISS over TCP, ...) start with their defaults. The web interface is new: old
+bookmarks to its pages no longer work, start from http://&lt;station address&gt;/.
+
+### 6. Going back
+- To a previous version of this fork: install its `<board>-update.bin` from the About page.
+- To the original firmware: install the original `.bin` the same way (or by USB). Your settings stay; the ones
+  added by this fork are ignored.
 
 ## PlatformIO Quick Start
 
