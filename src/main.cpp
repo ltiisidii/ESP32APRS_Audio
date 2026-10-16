@@ -56,6 +56,7 @@
 #include "supervisor.h"
 #include "objects.h"
 #include "kisstcp.h"
+#include "inet2rf.h"
 
 // Demodulator task priority. Was 0 (= idle): it only ran when nothing else wanted the CPU and
 // lost packets whenever the web server (async_tcp, prio 10) or the display were busy. It sleeps
@@ -1795,6 +1796,8 @@ void defaultConfig()
     config.rf2inetFilter = 0xFFFF; // All
     // INET->RF: messages only. Gating positions/WX/objects from APRS-IS to RF floods the channel.
     config.inet2rfFilter = FILTER_MESSAGE;
+    config.inet2rf_log = false; // Internet -> RF rules: log-only test off
+    config.inet2rf_rate = 4;    // at most 4 packets a minute from the Internet to RF
     config.digiFilter = DIGI_FILTER_DEFAULT;
     //--APRS-IS
     config.aprs_ssid = 1;
@@ -7531,6 +7534,11 @@ void taskAPRS(void *pvParameters)
                     newIGatePkg = true;
                     newDigiPkg = true;
                     kissTcpRxFrame(buf, size); // KISS over TCP client, if any (sent by taskNetwork)
+                    {
+                        char rfCall[12];
+                        snprintf(rfCall, sizeof(rfCall), incomingPacket.src.ssid ? "%s-%d" : "%s", incomingPacket.src.call, incomingPacket.src.ssid);
+                        inet2rfHeardRf(rfCall); // Internet -> RF rules: who is on RF here
+                    }
                     if (config.ext_tnc_enable)
                     {
                         if (config.ext_tnc_channel > 0 && config.ext_tnc_channel < 5)
@@ -9214,6 +9222,23 @@ void taskNetwork(void *pvParameters)
                                     if (start_dstssid > 0)
                                         ssid = line.charAt(start_dstssid + 1);
 
+                                    {
+                                        // Internet -> RF: the rules (and the log-only test) are in inet2rf.cpp
+                                        static char i2r[350];
+                                        if (inet2rfLine(line.c_str(), type, i2r, sizeof(i2r)))
+                                        {
+                                            pkgTxPush(i2r, strlen(i2r), 0, RF_CHANNEL);
+#if defined OLED || defined ST7735_160x80 || defined GUI_LCD
+                                            char sts[50];
+                                            snprintf(sts, sizeof(sts), "--SRC CALL--\n%s\n", src_call.c_str());
+                                            if (config.oled_enable)
+                                                pushTxDisp(TXCH_3PTY, "TX INET->RF", sts);
+#endif
+                                            status.inet2rf++;
+                                            igateTLM.INET2RF++;
+                                            log_d("INET2RF: %s\n", i2r);
+                                        }
+                                    }
                                     // RX-only iGate (INET -> RF off): nothing from the Internet is stored or shown; the
                                     // last heard list keeps what the radio heard and the heap is spared
                                     if (config.inet2rf && ssid > 47 && ssid < 58)
@@ -9257,41 +9282,6 @@ void taskNetwork(void *pvParameters)
                                                 }
                                             }
 #endif
-                                        }
-                                        // INET2RF affter filter
-                                        if (config.inet2rf)
-                                        {
-                                            if (type & config.inet2rfFilter)
-                                            {
-                                                String tnc2Raw = "";
-                                                char *strtmp = (char *)calloc(350, sizeof(char));
-                                                if (strtmp)
-                                                {
-                                                    if (config.aprs_ssid == 0)
-                                                        sprintf(strtmp, "%s>APE32A", config.aprs_mycall);
-                                                    else
-                                                        sprintf(strtmp, "%s-%d>APE32A", config.aprs_mycall, config.aprs_ssid);
-                                                    tnc2Raw = String(strtmp);
-                                                    tnc2Raw += ",RFONLY"; // fix path to rf only not send loop to inet
-                                                    tnc2Raw += ":}";      // 3rd-party frame
-                                                    tnc2Raw += line;
-                                                    if (line.length() < 256) // "}" + line must fit an APRS info field
-                                                        pkgTxPush(tnc2Raw.c_str(), tnc2Raw.length(), 0, RF_CHANNEL);
-                                                    else
-                                                        log_w("INET2RF dropped: too long for RF (%u)", (unsigned)line.length());
-                                                    char sts[50];
-                                                    sprintf(sts, "--SRC CALL--\n%s\n", src_call.c_str());
-#if defined OLED || defined ST7735_160x80 || defined GUI_LCD
-                                                    if (config.oled_enable)
-                                                        pushTxDisp(TXCH_3PTY, "TX INET->RF", sts);
-#endif
-                                                    status.inet2rf++;
-                                                    igateTLM.INET2RF++;
-                                                    log_d("INET2RF: %s\n", line.c_str());
-                                                    free(strtmp);
-                                                }
-                                                tnc2Raw.clear();
-                                            }
                                         }
                                     }
                                     free(raw);

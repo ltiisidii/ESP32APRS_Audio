@@ -33,6 +33,7 @@
 #include "supervisor.h"
 #include "objects.h"
 #include "kisstcp.h"
+#include "inet2rf.h"
 #include "sensor.h"
 #include "wireguard_vpn.h"
 #include "esp_wifi.h"
@@ -173,6 +174,8 @@ static void apiInfo(AsyncWebServerRequest *request)
     doc["heap"] = ESP.getFreeHeap();
     doc["heapBlock"] = ESP.getMaxAllocHeap();       // largest free block: small = heap in pieces
     doc["heapBlockMin"] = supervisorMinBlock();     // its lowest value since boot
+    if (config.inet2rf || config.inet2rf_log)
+        inet2rfLogRead(doc["i2rLog"].to<JsonArray>()); // Internet -> RF: last decisions
     doc["heapMin"] = ESP.getMinFreeHeap();
     doc["heapSize"] = ESP.getHeapSize();
 #ifdef BOARD_HAS_PSRAM

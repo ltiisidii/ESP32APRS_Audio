@@ -516,6 +516,10 @@ typedef struct Config_Struct
 	bool kiss_tcp_en;      // off by default
 	bool kiss_tcp_tx;      // frames from the client may be transmitted (off: RX only)
 	uint16_t kiss_tcp_port; // 0 = KISS_TCP_PORT (8001)
+
+	// Internet -> RF rules (src/inet2rf.cpp)
+	bool inet2rf_log;     // take the decisions and log them, transmit nothing (test)
+	uint8_t inet2rf_rate; // packets per minute at most (0 = 4)
 } Configuration;
 
 // Factory defaults (region: Argentina). Used by defaultConfig() and as fallbacks

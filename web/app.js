@@ -258,7 +258,10 @@ async function dashboard(main) {
         ['Master', i.bt.master ? '<span class="ok">enabled</span>' : 'disabled'],
         ['Name', esc(i.bt.name)],
         ['Mode', esc(i.bt.mode)],
-      ])) : '');
+      ])) : '') +
+      (i.i2rLog ? card('Internet &rarr; RF decisions', i.i2rLog.length ?
+        '<pre class="mono" style="white-space:pre-wrap;margin:0">' + i.i2rLog.slice().reverse().map(esc).join('\n') + '</pre>' :
+        '<span class="muted">Nothing from the Internet to decide yet</span>', 'wide') : '');
   };
   await draw();
   const timer = setInterval(() => draw().then(() => setConn(true), () => setConn(false)), 10000);

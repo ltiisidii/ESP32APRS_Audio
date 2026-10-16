@@ -89,6 +89,8 @@ void configToJson(const Configuration &config, JsonDocument &doc)
     doc["igatePos2inet"] = config.igate_loc2inet;
     doc["rf2inetFilter"] = config.rf2inetFilter;
     doc["inet2rfFiltger"] = config.inet2rfFilter;
+    doc["inet2rfLog"] = config.inet2rf_log;
+    doc["inet2rfRate"] = config.inet2rf_rate ? config.inet2rf_rate : 4;
 
     doc["igateSSID"] = config.aprs_ssid;
     doc["igatePort"] = config.aprs_port;
@@ -689,6 +691,8 @@ void configFromJson(JsonDocument &doc, Configuration &config)
     config.igate_loc2inet = doc["igatePos2inet"];
     config.rf2inetFilter = doc["rf2inetFilter"];
     config.inet2rfFilter = doc["inet2rfFiltger"];
+    config.inet2rf_log = doc["inet2rfLog"] | false;
+    config.inet2rf_rate = doc["inet2rfRate"] | 4;
 
     config.aprs_ssid = doc["igateSSID"];
     config.aprs_port = doc["igatePort"];
