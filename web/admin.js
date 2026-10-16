@@ -145,7 +145,7 @@ pages.about = async (main) => {
       ['Donate', link('https://www.paypal.me/0hs5tqa0')],
       ['This version', 'Modified fork by Jonatan &mdash; LU6EWB'],
       ['Source', link('https://github.com/ltiisidii/ESP32APRS_Audio')],
-      ['Changes', 'Stability and recovery, tests, digipeater duplicate suppression, new web interface (2026)'],
+      ['Changes', 'See "Changes in this fork" in the README: ' + link('https://github.com/ltiisidii/ESP32APRS_Audio#changes-in-this-fork')],
       ['License', 'GNU General Public License v3; source code on GitHub'],
     ])) +
     card('WiFi', rows([
