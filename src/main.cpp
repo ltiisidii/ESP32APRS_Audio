@@ -55,6 +55,7 @@
 #include "sensor.h"
 #include "supervisor.h"
 #include "objects.h"
+#include "kisstcp.h"
 
 // Demodulator task priority. Was 0 (= idle): it only ran when nothing else wanted the CPU and
 // lost packets whenever the web server (async_tcp, prio 10) or the display were busy. It sleeps
@@ -2366,6 +2367,10 @@ config.oled_enable = true;
     sprintf(config.host_name, "ESP32APRS_Audio");
 
     config.fx25_mode = 2; // Used modem mode FX.25 RX+TX
+
+    config.kiss_tcp_en = false; // KISS over TCP off; when turned on, RX only
+    config.kiss_tcp_tx = false;
+    config.kiss_tcp_port = KISS_TCP_PORT;
 }
 
 uint64_t NTP_Timeout;
@@ -7524,6 +7529,7 @@ void taskAPRS(void *pvParameters)
                     type = pkgType((const char *)incomingPacket.info);
                     newIGatePkg = true;
                     newDigiPkg = true;
+                    kissTcpRxFrame(buf, size); // KISS over TCP client, if any (sent by taskNetwork)
                     if (config.ext_tnc_enable)
                     {
                         if (config.ext_tnc_channel > 0 && config.ext_tnc_channel < 5)
@@ -8980,6 +8986,7 @@ void taskNetwork(void *pvParameters)
         timerNetwork = micros() - timerNetwork_old;
         vTaskDelay(10 / portTICK_PERIOD_MS);
         timerNetwork_old = micros();
+        kissTcpLoop(); // KISS over TCP: accept, send heard frames, read the client
 
 #ifdef PPPOS
         if (config.ppp_enable)

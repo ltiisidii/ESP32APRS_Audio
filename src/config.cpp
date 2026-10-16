@@ -7,6 +7,7 @@
 */
 
 #include "config.h"
+#include "kisstcp.h"
 #include <new>
 #include <LITTLEFS.h>
 #include <SPIFFS.h>
@@ -547,6 +548,10 @@ void configToJson(const Configuration &config, JsonDocument &doc)
         oStart.add(o.start);
     }
 
+    // KISS over TCP
+    doc["kissTcpEn"] = config.kiss_tcp_en;
+    doc["kissTcpTx"] = config.kiss_tcp_tx;
+    doc["kissTcpPort"] = config.kiss_tcp_port ? config.kiss_tcp_port : KISS_TCP_PORT;
 }
 
 bool saveConfiguration(const char *filename, const Configuration &config)
@@ -1114,6 +1119,11 @@ void configFromJson(JsonDocument &doc, Configuration &config)
         o.expire = doc["objExp"][i] | 0;
         o.start = doc["objStart"][i] | 0;
     }
+
+    // KISS over TCP (missing in older files: off, RX only)
+    config.kiss_tcp_en = doc["kissTcpEn"] | false;
+    config.kiss_tcp_tx = doc["kissTcpTx"] | false;
+    config.kiss_tcp_port = doc["kissTcpPort"] | KISS_TCP_PORT;
 }
 
 // ---- web API helpers --------------------------------------------------------------------------

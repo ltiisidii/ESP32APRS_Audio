@@ -461,6 +461,16 @@ pages.wifi = (main) => formPage(main, (cfg, meta) => {
       note: 'The device connects to the strongest enabled network in range.',
     },
   ];
+  sections.push({
+    title: 'KISS over TCP',
+    fields: [
+      { k: 'kissTcpEn', l: 'Enable', t: 'sw' },
+      { k: 'kissTcpPort', l: 'Port', t: 'num', min: 1, max: 65535, h: '8001 is the usual one' },
+      { k: 'kissTcpTx', l: 'Allow TX', t: 'sw', h: 'Off: the program only receives. On: it can transmit through this station' },
+    ],
+    note: 'For APRSdroid, Xastir, PinPoint or Dire Wolf on the network: they get every frame heard on RF. One program at a time. ' +
+      'The port has no password: allow TX only on a trusted network.',
+  });
   if (meta.features.bt) {
     sections.push({
       title: 'Bluetooth (BLE)',

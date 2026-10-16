@@ -511,6 +511,11 @@ typedef struct Config_Struct
 	uint16_t msg_interval;
 
 	aprsObject obj[OBJ_COUNT];
+
+	// KISS over TCP (src/kisstcp.cpp)
+	bool kiss_tcp_en;      // off by default
+	bool kiss_tcp_tx;      // frames from the client may be transmitted (off: RX only)
+	uint16_t kiss_tcp_port; // 0 = KISS_TCP_PORT (8001)
 } Configuration;
 
 // Factory defaults (region: Argentina). Used by defaultConfig() and as fallbacks
