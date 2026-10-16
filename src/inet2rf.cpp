@@ -4,7 +4,7 @@
  2. its sender was NOT heard on RF in that time (then the message already went out on RF locally);
  3. the addressee is NOT connected straight to APRS-IS (a phone app gets it from there);
  5. it is sent as a clean third-party frame: }SRC>DEST,TCPIP,MYCALL*:info (no qAC/qAR APRS-IS path);
-    packets marked NOGATE, RFONLY or TCPXX are never gated;
+    packets marked NOGATE, RFONLY or TCPXX, and packets that are already third-party ('}'), are never gated;
  6. at most "Internet -> RF per minute" packets per minute, so a burst from the Internet can't fill the channel.
  Messages to this station are never gated (they are for us). Other packet types (when chosen in "Internet -> RF
  types") only go through rules 5 and 6.
@@ -29,7 +29,7 @@ typedef struct
 
 static heardEntry heard[HEARD_N];
 static portMUX_TYPE heardMux = portMUX_INITIALIZER_UNLOCKED;
-static char logTxt[LOG_N][96];
+static char logTxt[LOG_N][128];
 static uint8_t logHead = 0, logCount = 0;
 static uint32_t sentMs[16]; // times of the last sends, for the per-minute limit
 
@@ -100,14 +100,16 @@ static void lookup(const char *call, bool &rf, bool &inet)
     portEXIT_CRITICAL(&heardMux);
 }
 
+static const char *logInfo = ""; // info field of the packet being decided, shown in the log
+
 static void logAdd(bool sent, bool test, const char *src, const char *what, const char *why)
 {
     char *e = logTxt[logHead];
     time_t t = time(NULL);
     struct tm tm;
     localtime_r(&t, &tm);
-    snprintf(e, sizeof(logTxt[0]), "%02d:%02d:%02d %s %s %s: %s", tm.tm_hour, tm.tm_min, tm.tm_sec,
-             sent ? (test ? "WOULD SEND" : "SENT") : "skip", src, what, why);
+    snprintf(e, sizeof(logTxt[0]), "%02d:%02d:%02d %s %s %s: %s [%.30s]", tm.tm_hour, tm.tm_min, tm.tm_sec,
+             sent ? (test ? "WOULD SEND" : "SENT") : "skip", src, what, why, logInfo);
     logHead = (logHead + 1) % LOG_N;
     if (logCount < LOG_N)
         logCount++;
@@ -180,6 +182,13 @@ bool inet2rfLine(const char *line, uint16_t type, char *tnc2, size_t tnc2Size)
     char what[24];
     snprintf(what, sizeof(what), "%.20s", info[0] == ':' ? "message" : "packet");
 
+    logInfo = info;
+    if (info[0] == '}')
+    {
+        // already a third-party packet (an iGate passed it on): wrapping it again is not allowed
+        logAdd(false, test, src, what, "already third-party");
+        return false;
+    }
     if (strstr(header, "NOGATE") || strstr(header, "RFONLY") || strstr(header, "TCPXX"))
     {
         logAdd(false, test, src, what, "marked not to gate");
