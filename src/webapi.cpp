@@ -282,6 +282,8 @@ static void apiInfo(AsyncWebServerRequest *request)
     s["drop"] = status.dropCount;
     s["dup"] = status.dupCount;
     s["error"] = status.errorCount;
+    s["fx25"] = status.fx25Count;       // received as FX.25
+    s["fx25Fix"] = status.fx25FixCount; // ... and repaired by FX.25
     sendJson(request, doc);
 }
 

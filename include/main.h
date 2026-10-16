@@ -290,6 +290,8 @@ typedef struct statisticStruct
 	uint32_t txInetCount; // packets of this station sent to APRS-IS (beacons, telemetry...)
 	uint32_t rxCount;
 	uint32_t dupCount;
+	uint32_t fx25Count;    // packets received as FX.25
+	uint32_t fx25FixCount; // ... of which needed error correction
 } statusType;
 
 typedef struct digiTLM_struct

@@ -7495,6 +7495,12 @@ void taskAPRS(void *pvParameters)
                 // take the packet from the TNC out of the queue
                 ax25_decode(buf, size, mV, &incomingPacket);                
                 status.allCount++;
+                if (fixed != AX25_NOT_FX25) // FX.25 frame: "fixed" = bytes repaired by Reed-Solomon
+                {
+                    status.fx25Count++;
+                    if (fixed > 0)
+                        status.fx25FixCount++;
+                }
                 if (isValidCallsignChars(incomingPacket.src.call) && packet2Raw(tnc2, incomingPacket) > 0)
                 {
                     String info((const char *)incomingPacket.info);
