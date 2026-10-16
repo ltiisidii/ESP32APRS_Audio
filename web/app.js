@@ -215,7 +215,8 @@ async function dashboard(main) {
       card('Statistics', rows([
         ['Radio RX', s.rx],
         ['Packet RX', s.pkt],
-        ['Packet TX', s.tx],
+        ['Packet TX (radio)', s.tx],
+        s.txInet !== undefined && ['Sent to Internet', s.txInet],
         ['RF &rarr; INET', s.rf2inet],
         ['INET &rarr; RF', s.inet2rf],
         ['Digi', s.digi + ' (duplicates dropped ' + s.dup + ')'],
