@@ -265,6 +265,16 @@ pages.modules = (main) => formPage(main, (cfg, meta) => {
       ],
     },
     {
+      title: 'KISS over TCP',
+      fields: [
+        { k: 'kissTcpEn', l: 'Enable', t: 'sw' },
+        { k: 'kissTcpPort', l: 'Port', t: 'num', min: 1, max: 65535, h: '8001 is the usual one' },
+        { k: 'kissTcpTx', l: 'Allow TX', t: 'sw', h: 'Off: the program only receives. On: it can transmit through this station' },
+      ],
+      note: 'For APRSdroid, Xastir, PinPoint or Dire Wolf on the network: they get every frame heard on RF. One program at a time. ' +
+        'The port has no password: allow TX only on a trusted network.',
+    },
+    {
       title: 'AT command channels',
       fields: [
         { k: 'cmdOnMqtt', l: 'MQTT', t: 'sw' },
@@ -294,7 +304,7 @@ pages.modules = (main) => formPage(main, (cfg, meta) => {
   }
   // Most used first: the radio wiring, then GPS and serial ports, buses, inputs, external devices
   const ORDER = ['Radio wiring', 'GNSS', 'UART0', 'UART1', 'UART2', 'I2C 0 (display)', 'I2C 1', '1-Wire bus', 'Counter 0', 'Counter 1',
-    'Modbus', 'External TNC', 'Cellular modem (PPPoS)', 'AT command channels'];
+    'Modbus', 'External TNC', 'KISS over TCP', 'Cellular modem (PPPoS)', 'AT command channels'];
   sections.sort((x, y) => ORDER.indexOf(x.title) - ORDER.indexOf(y.title));
   return {
     title: 'Modules',
