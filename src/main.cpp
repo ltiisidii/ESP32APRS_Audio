@@ -9133,9 +9133,16 @@ void taskNetwork(void *pvParameters)
                     {
                         lastIsRx = millis();
                         pingTimeout = millis64() + 300000;                // Reset ping timout
+                        // One line into a fixed buffer, then a single String of the right size: readStringUntil()
+                        // grew a String one byte at a time, several reallocations per packet, and with an
+                        // APRS-IS filter that brings many packets the heap ended up in small pieces (the web
+                        // server could no longer accept connections, pings were lost).
+                        static char isLine[512];
                         aprsIsLock(portMAX_DELAY);
-                        String line = aprsClient.readStringUntil('\n');
+                        size_t isLen = aprsClient.readBytesUntil('\n', isLine, sizeof(isLine) - 1);
                         aprsIsUnlock(); // read the server answer line by line
+                        isLine[isLen] = 0;
+                        String line(isLine);
                         status.isCount++;
                         int start_val = line.indexOf(">", 0); // position of the first >
                         if (start_val > 3)
@@ -9170,7 +9177,9 @@ void taskNetwork(void *pvParameters)
                                     if (start_dstssid > 0)
                                         ssid = line.charAt(start_dstssid + 1);
 
-                                    if (ssid > 47 && ssid < 58)
+                                    // RX-only iGate (INET -> RF off): nothing from the Internet is stored or shown; the
+                                    // last heard list keeps what the radio heard and the heap is spared
+                                    if (config.inet2rf && ssid > 47 && ssid < 58)
                                     {
                                         size_t len = src_call.length();
                                         char call[15];

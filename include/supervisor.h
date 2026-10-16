@@ -35,6 +35,8 @@ extern const char *volatile loopStage;
 
 // Start the supervisor task (call once from setup() after the tasks are created)
 void supervisorStart(void);
+// Smallest "largest free block" of the heap since boot, bytes (fragmentation, for the web status)
+uint32_t supervisorMinBlock(void);
 // Why the supervisor restarted the previous run ("" if it did not); for the web status
 const char *supervisorLastRestart(void);
 

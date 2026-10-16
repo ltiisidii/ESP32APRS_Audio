@@ -170,6 +170,8 @@ static void apiInfo(AsyncWebServerRequest *request)
     doc["time"] = (uint32_t)time(NULL);
     doc["tz"] = config.timeZone;
     doc["heap"] = ESP.getFreeHeap();
+    doc["heapBlock"] = ESP.getMaxAllocHeap();       // largest free block: small = heap in pieces
+    doc["heapBlockMin"] = supervisorMinBlock();     // its lowest value since boot
     doc["heapMin"] = ESP.getMinFreeHeap();
     doc["heapSize"] = ESP.getHeapSize();
 #ifdef BOARD_HAS_PSRAM

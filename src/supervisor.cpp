@@ -14,6 +14,14 @@
 #define SV_ADC_PAUSE_MAX_MS 300000 // RX audio paused on purpose (OTA, saving) for longer than this
 #define SV_OTA_CONFIRM_MS 120000   // healthy run time before confirming a new OTA firmware
 #define SV_REPORT_MS 600000        // health report period in the log
+#define SV_MIN_BLOCK 8192          // largest free block below this = heap in pieces: TCP can't accept, WiFi drops
+#define SV_MIN_BLOCK_MS 180000     // ... for this long: restart (a full reset, see main.cpp fullResetIfPartial)
+
+static volatile uint32_t svBlockLow = UINT32_MAX; // smallest "largest free block" seen since boot (web status)
+uint32_t supervisorMinBlock(void)
+{
+    return svBlockLow;
+}
 
 extern volatile uint32_t adcIsrCount; // AFSK.cpp, counts ADC sampling interrupts
 bool getTransmit();                   // AFSK.cpp, true while PTT/TX is active
@@ -154,6 +162,21 @@ static void taskSupervisor(void *pvParameters)
                     snprintf(reason, sizeof(reason), "%s stalled %us", svName[i], (unsigned)((now - last) / 1000));
                 supervisorRestart(reason);
             }
+        }
+
+        uint32_t block = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+        if (block < svBlockLow)
+            svBlockLow = block;
+        static uint32_t smallSince = 0;
+        if (block >= SV_MIN_BLOCK)
+            smallSince = 0;
+        else if (smallSince == 0)
+            smallSince = now | 1;
+        else if ((uint32_t)(now - smallSince) > SV_MIN_BLOCK_MS)
+        {
+            char reason[48];
+            snprintf(reason, sizeof(reason), "heap in pieces (largest block %u)", (unsigned)block);
+            supervisorRestart(reason);
         }
 
         uint32_t adc = adcIsrCount;
