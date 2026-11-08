@@ -27,6 +27,13 @@ pages.diag = async (main) => {
         r.rssiRaw !== undefined && ['Last RSSI answer', esc(r.rssiRaw)],
         ['Audio samples', r.adcCount],
       ]) + '<h3>Last setup commands and answers</h3>' + pre(rlog, 'No command sent to the module since start'), 'wide') +
+      (i.i2c ? card('I2C 0 (display)', rows([
+        ['Bus', i.i2c.en ? 'on, SDA ' + i.i2c.sda + ' / SCL ' + i.i2c.scl : 'off'],
+        ['Display', i.i2c.display ? 'enabled' : 'off'],
+        i.i2c.en && ['Found at start', i.i2c.found.length ?
+          i.i2c.found.map(a => '0x' + a.toString(16).toUpperCase().padStart(2, '0') + (a === 0x3C || a === 0x3D ? ' (display)' : '')).join(', ') :
+          '<span class="bad">nothing: check wiring and power</span>'],
+      ])) : '') +
       card('Internet &rarr; RF decisions',
         i.i2rLog ? pre(i.i2rLog.slice().reverse(), 'Nothing from the Internet to decide yet') :
           '<span class="muted">Off. Turn on "Internet &rarr; RF test" on the iGate page to see what would go to RF and why, without transmitting.</span>', 'wide') +
