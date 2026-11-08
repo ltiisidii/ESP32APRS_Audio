@@ -63,6 +63,8 @@ extern String rfRssiRaw;
 extern String rfInitError;
 extern int8_t startCauseBeforeFullReset; // main.cpp: partial restart turned into a full one (-1 = none)
 void rfLogRead(JsonArray out);           // main.cpp: last module setup commands and answers
+extern uint8_t i2cFound[8];   // main.cpp: I2C 0 addresses that answered at start
+extern uint8_t i2cFoundCount;
 extern volatile bool bootArmed; // main.cpp: BOOT button seen released since boot
 bool bootPressed();
 extern const char *volatile rfRssiState;
@@ -264,6 +266,15 @@ static void apiInfo(AsyncWebServerRequest *request)
     b["name"] = config.bt_name;
     b["mode"] = config.bt_mode == 1 ? "TNC2" : config.bt_mode == 2 ? "KISS" : "NONE";
 #endif
+
+    JsonObject i2 = doc["i2c"].to<JsonObject>();
+    i2["en"] = config.i2c_enable;
+    i2["sda"] = config.i2c_sda_pin;
+    i2["scl"] = config.i2c_sck_pin;
+    i2["display"] = config.oled_enable;
+    JsonArray f = i2["found"].to<JsonArray>();
+    for (uint8_t n = 0; n < i2cFoundCount; n++)
+        f.add(i2cFound[n]);
 
     JsonObject g = doc["gps"].to<JsonObject>();
     g["en"] = config.gnss_enable;

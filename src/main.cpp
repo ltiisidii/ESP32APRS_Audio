@@ -3793,6 +3793,8 @@ bool AFSKInitAct = false;
 #include "hal/wdt_hal.h"
 #include <Preferences.h>
 #include <esp_ota_ops.h>
+uint8_t i2cFound[8];  // I2C 0 addresses that answered at start (webapi.cpp: Diagnostics)
+uint8_t i2cFoundCount = 0;
 int8_t startCauseBeforeFullReset = -1; // esp_reset_reason_t of the partial restart, -1 = none (webapi.cpp)
 
 bool fullResetAfterOtaConfirm = false; // partial start of a firmware still on trial: supervisor resets after confirming it
@@ -3950,6 +3952,13 @@ void setup()
     if (config.i2c_enable)
     {
         Wire.begin(config.i2c_sda_pin, config.i2c_sck_pin, config.i2c_freq);
+        // Who answers on the bus, for the Diagnostics page (a black display: is it there at all?)
+        for (uint8_t a = 0x08; a < 0x78 && i2cFoundCount < sizeof(i2cFound); a++)
+        {
+            Wire.beginTransmission(a);
+            if (Wire.endTransmission() == 0)
+                i2cFound[i2cFoundCount++] = a;
+        }
         #ifdef TTGO_TWR
         setupPower();
         #endif        
