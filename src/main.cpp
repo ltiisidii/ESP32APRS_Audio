@@ -57,6 +57,7 @@
 #include "objects.h"
 #include "kisstcp.h"
 #include "inet2rf.h"
+#include "beacon_gap.h"
 
 // Demodulator task priority. Was 0 (= idle): it only ran when nothing else wanted the CPU and
 // lost packets whenever the web server (async_tcp, prio 10) or the display were busy. It sleeps
@@ -6938,6 +6939,8 @@ void taskAPRS(void *pvParameters)
     uint64_t igateSTSInterval = 0;
     uint64_t digiSTSInterval = 0;
     uint64_t trkSTSInterval = 0;
+    // When each station last sent its position (0 = not yet): its status keeps 60 s away
+    uint64_t igateLastPos = 0, digiLastPos = 0, trkLastPos = 0;
 
     uint16_t type = 0;
     bool newIGatePkg = false;
@@ -7141,10 +7144,21 @@ void taskAPRS(void *pvParameters)
         { // TRACKER MODE
             if (config.trk_sts_interval > 10)
             {
-                if (millis64() > trkSTSInterval)
+                uint64_t now = millis64();
+                if (now > trkSTSInterval)
                 {
-                    trkSTSInterval = millis64() + (config.trk_sts_interval * 1000);
-                    tracker_status(config.trk_status);
+                    // Next position known only with a fixed interval (smart beacon decides on the go)
+                    uint64_t nextPos = 0;
+                    if (!(config.trk_smartbeacon && config.trk_gps) && (int)tx_counter <= (int)tx_interval)
+                        nextPos = now + (uint64_t)(tx_interval - tx_counter) * 1000;
+                    uint64_t at = statusSendAt(now, trkLastPos, nextPos);
+                    if (at > now)
+                        trkSTSInterval = at;
+                    else
+                    {
+                        trkSTSInterval = now + (config.trk_sts_interval * 1000);
+                        tracker_status(config.trk_status);
+                    }
                 }
             }
             if (millis64() > tickInterval)
@@ -7409,6 +7423,7 @@ void taskAPRS(void *pvParameters)
                 log_d("TRACKER EVENT_TX_POSITION=%d\t INTERVAL=%d\n", EVENT_TX_POSITION, tx_interval);
                 tx_counter = 0;
                 EVENT_TX_POSITION = 0;
+                trkLastPos = millis64();
                 last_heading = SB_HEADING;
 #if defined OLED || defined ST7735_160x80 || defined GUI_LCD
                 if (config.trk_gps)
@@ -7674,10 +7689,17 @@ void taskAPRS(void *pvParameters)
         {
             if (config.igate_sts_interval > 10)
             {
-                if (millis64() > igateSTSInterval)
+                uint64_t now = millis64();
+                if (now > igateSTSInterval)
                 {
-                    igateSTSInterval = millis64() + (config.igate_sts_interval * 1000);
-                    igate_status(config.igate_status);
+                    uint64_t at = statusSendAt(now, igateLastPos, config.igate_bcn ? iGatetickInterval : 0);
+                    if (at > now)
+                        igateSTSInterval = at;
+                    else
+                    {
+                        igateSTSInterval = now + (config.igate_sts_interval * 1000);
+                        igate_status(config.igate_status);
+                    }
                 }
             }
             // IGATE Position
@@ -7713,6 +7735,7 @@ void taskAPRS(void *pvParameters)
                     if (rawData != "")
                     {
                         iGatetickInterval = millis64() + (config.igate_interval * 1000);
+                        igateLastPos = millis64();
                         Sleep_Activate &= ~ACTIVATE_IGATE;
                         StandByTick = millis() + (5000);
                         if (config.igate_tlm_interval > 0)
@@ -7939,10 +7962,17 @@ void taskAPRS(void *pvParameters)
         {
             if (config.digi_sts_interval > 10)
             {
-                if (millis64() > digiSTSInterval)
+                uint64_t now = millis64();
+                if (now > digiSTSInterval)
                 {
-                    digiSTSInterval = millis64() + (config.digi_sts_interval * 1000);
-                    digi_status(config.digi_status);
+                    uint64_t at = statusSendAt(now, digiLastPos, config.digi_bcn ? DiGiInterval : 0);
+                    if (at > now)
+                        digiSTSInterval = at;
+                    else
+                    {
+                        digiSTSInterval = now + (config.digi_sts_interval * 1000);
+                        digi_status(config.digi_status);
+                    }
                 }
             }
             // DIGI Position
@@ -7978,6 +8008,7 @@ void taskAPRS(void *pvParameters)
                     if (rawData != "")
                     {
                         DiGiInterval = millis64() + (config.digi_interval * 1000);
+                        digiLastPos = millis64();
                         Sleep_Activate &= ~ACTIVATE_DIGI;
                         StandByTick = millis() + (5000);
                         if (config.digi_tlm_interval > 0)
