@@ -278,7 +278,7 @@ const position = (p, altKey) => [
 const texts = (p, stsKey) => [
   { k: p + 'Comment', l: 'Comment', t: 'txt', max: 25, w: 30 },
   { k: p + 'Status', l: 'Status text', t: 'txt', max: 50, w: 50 },
-  { k: stsKey, l: 'Status interval', t: 'num', min: 0, max: 3600, unit: 's', h: '0 = do not send' },
+  { k: stsKey, l: 'Status interval', t: 'num', min: 0, max: 3600, unit: 's', h: '0 = do not send. Always sent at least 60 s apart from the position beacon' },
 ];
 const FILTERS = [[4, 'Message'], [64, 'Status'], [16, 'Telemetry'], [8, 'Weather'], [1, 'Object'], [2, 'Item'], [32, 'Query'], [256, 'Buoy'], [128, 'Position']];
 
