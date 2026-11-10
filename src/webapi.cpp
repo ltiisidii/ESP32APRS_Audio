@@ -63,6 +63,12 @@ extern String rfRssiRaw;
 extern String rfInitError;
 extern int8_t startCauseBeforeFullReset; // main.cpp: partial restart turned into a full one (-1 = none)
 void rfLogRead(JsonArray out);           // main.cpp: last module setup commands and answers
+extern uint8_t i2cFound[8];   // main.cpp: I2C 0 addresses that answered at start
+extern uint8_t i2cFoundCount;
+extern uint32_t aprsIsConnects, aprsIsDrops; // main.cpp: APRS-IS connection history
+extern uint64_t aprsIsLastDropMs;
+extern const char *aprsIsLastDropWhy;
+void aprsIsNoteDrop(const char *why);
 extern volatile bool bootArmed; // main.cpp: BOOT button seen released since boot
 bool bootPressed();
 extern const char *volatile rfRssiState;
@@ -205,6 +211,13 @@ static void apiInfo(AsyncWebServerRequest *request)
     n["aprsis"] = (bool)aprsClient.connected();
     n["aprsHost"] = config.aprs_host;
     n["aprsPort"] = config.aprs_port;
+    n["isConnects"] = aprsIsConnects;
+    n["isDrops"] = aprsIsDrops;
+    if (aprsIsLastDropMs)
+    {
+        n["isDropAgo"] = (uint32_t)((millis64() - aprsIsLastDropMs) / 1000); // seconds
+        n["isDropWhy"] = aprsIsLastDropWhy;
+    }
     n["vpn"] = wireguard_active();
 #ifdef PPPOS
     n["ppp"] = PPP.connected();
@@ -264,6 +277,20 @@ static void apiInfo(AsyncWebServerRequest *request)
     b["name"] = config.bt_name;
     b["mode"] = config.bt_mode == 1 ? "TNC2" : config.bt_mode == 2 ? "KISS" : "NONE";
 #endif
+
+    JsonObject i2 = doc["i2c"].to<JsonObject>();
+    i2["en"] = config.i2c_enable;
+    i2["sda"] = config.i2c_sda_pin;
+    i2["scl"] = config.i2c_sck_pin;
+    i2["display"] = config.oled_enable;
+#if defined(OLED) || defined(GUI_LCD)
+    i2["driver"] = true;
+#else
+    i2["driver"] = false; // built without a display: an enabled one stays black
+#endif
+    JsonArray f = i2["found"].to<JsonArray>();
+    for (uint8_t n = 0; n < i2cFoundCount; n++)
+        f.add(i2cFound[n]);
 
     JsonObject g = doc["gps"].to<JsonObject>();
     g["en"] = config.gnss_enable;
@@ -434,7 +461,10 @@ static void apiConfigPost(AsyncWebServerRequest *request)
         if (plan.txPower)
             WiFi.setTxPower((wifi_power_t)config.wifi_power);
         if (plan.aprsIs)
+        {
+            aprsIsNoteDrop("settings changed");
             aprsIsStop();
+        }
         if (plan.clock)
             configTime(3600 * config.timeZone, 0, config.ntp_host);
 #ifdef ST7735_LED_K_Pin
