@@ -78,7 +78,7 @@ pages.messages = async (main) => {
         { k: 'msgMycall', l: 'My callsign', t: 'txt', max: 9, w: 11, up: true, h: 'With SSID, e.g. LU6EWB-9' },
         { k: 'msgRf', l: 'Send over RF', t: 'sw' },
         { k: 'msgInet', l: 'Send over Internet', t: 'sw' },
-        pathSel('msgPath', meta),
+        pathSel('msgPath', meta, undefined, PATH_HELP.msg),
         { k: 'msgRetry', l: 'Retries', t: 'num', min: 0, max: 99, h: '0 = send once, no acknowledgement expected' },
         { k: 'msgInterval', l: 'Retry interval', t: 'num', min: 1, max: 9999, unit: 's' },
         { k: 'msgEncrypt', l: 'Encryption', t: 'sw', h: 'Hiding the content of amateur radio traffic is not allowed in most countries. Use it only for remote AT commands.' },

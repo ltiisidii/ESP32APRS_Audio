@@ -46,8 +46,11 @@ function control(f) {
       return '<input type="range" id="' + id + '" min="' + f.min + '" max="' + f.max + '" value="' + v +
         '" oninput="this.nextElementSibling.textContent=this.value"><b class="rv">' + v + '</b>';
     case 'sel':
-      return '<select id="' + id + '"' + w + '>' + f.o.map(([val, label], n) =>
-        '<option value="' + n + '"' + (val === v || String(val) === String(v) ? ' selected' : '') + '>' + esc(label) + '</option>').join('') + '</select>';
+      // A third element true = hidden unless it is the current value (obsolete PATH presets)
+      return '<select id="' + id + '"' + w + '>' + f.o.map(([val, label, hide], n) => {
+        const sel = val === v || String(val) === String(v);
+        return hide && !sel ? '' : '<option value="' + n + '"' + (sel ? ' selected' : '') + '>' + esc(label) + '</option>';
+      }).join('') + '</select>';
     case 'bits':
       return '<div class="bits" id="' + id + '">' + f.o.map(([bit, label]) =>
         '<label><input type="checkbox" data-bit="' + bit + '"' + (v & bit ? ' checked' : '') + '> ' + esc(label) + '</label>').join('') + '</div>';
@@ -67,7 +70,7 @@ function read(f, form) {
     case 'txt': return f.up ? el.value.trim().toUpperCase() : el.value;
     case 'pass': return el.value;
     case 'num': case 'range': { const n = Number(el.value); return el.value === '' || isNaN(n) ? v : n; }
-    case 'sel': return f.o[el.selectedIndex][0];
+    case 'sel': return f.o[+el.value][0]; // option value = index in f.o (some may be hidden)
     case 'bits': {
       let r = v;
       el.querySelectorAll('input').forEach((c) => { const b = +c.dataset.bit; r = c.checked ? r | b : r & ~b; });
@@ -259,12 +262,31 @@ const SSID_USE = ['primary station', 'generic / digi', 'generic', 'generic', 'ge
   'special activity', 'handheld', 'boat / RV / 2nd mobile', 'mobile', 'iGate / Internet', 'balloon / aircraft',
   'one-way tracker', 'weather station', 'truck', 'generic'];
 const ssidOpts = (star) => SSID_USE.map((u, n) => [n, (n ? '-' + n : '0 (none)') + '  ' + u + (n === star ? '  ★' : '')]);
-const pathSel = (k, meta) => ({ k, l: 'PATH', t: 'sel', o: meta.paths.map((p, n) => [n, p]) });
+// PATH menu. Value = index in meta.paths (PATH_NAME in webservice.h). New-N paths first, then the user
+// defined ones; the obsolete ones (RELAY, TRACEn-N, GATE, ECHO, DST-TRACE) only when already chosen.
+// rec = the usual one for the page (star), h = when to use what.
+const PATH_ORDER = [0, 17, 18, 19, 20, 8, 9, 13, 14, 15, 16, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12];
+const PATH_OBSOLETE = [1, 2, 3, 4, 5, 6, 7, 10, 11, 12];
+const PATH_HELP = {
+  fixed: 'Fixed station: WIDE2-1. WIDE2-2 only where no digipeater is close.',
+  digi: 'Own beacon of a digipeater: WIDE2-1 (more hops only load the channel).',
+  mobile: 'Mobile: WIDE1-1,WIDE2-1. WIDE1-1,WIDE2-2 only in rural areas without iGates.',
+  tlm: 'Telemetry is low priority: OFF reaches the iGates that hear this station directly; WIDE2-1 at most.',
+  msg: 'WIDE2-1 from a fixed station, WIDE1-1,WIDE2-1 from a mobile.',
+};
+const pathSel = (k, meta, rec, h) => ({
+  k, l: 'PATH', t: 'sel', h,
+  o: PATH_ORDER.filter((n) => n < meta.paths.length).map((n) => {
+    const old = PATH_OBSOLETE.includes(n);
+    return [n, meta.paths[n] + (n === rec ? '  ★' : '') + (old ? '  (obsolete)' : ''), old];
+  }),
+});
 const station = (p, meta, extra, star) => [
   { k: p + 'Mycall', l: 'Callsign', t: 'txt', max: 7, w: 9, up: true, re: CALL_RE, reMsg: '3 to 7 letters/digits' },
   { k: p + 'SSID', l: 'SSID', t: 'sel', o: ssidOpts(star), w: 30 },
   { k: p + 'Symbol', l: 'Symbol', t: 'sym' },
-].concat(extra || [], [pathSel(p + 'Path', meta)]);
+].concat(extra || [], [p === 'trk' ? pathSel(p + 'Path', meta, 19, PATH_HELP.mobile) :
+  pathSel(p + 'Path', meta, 17, p === 'digi' ? PATH_HELP.digi : PATH_HELP.fixed)]);
 const position = (p, altKey) => [
   { k: p + 'Bcn', l: 'Beacon', t: 'sw' },
   { k: p + 'INV', l: 'Interval', t: 'num', min: 0, max: 3600, unit: 's' },

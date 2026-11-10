@@ -147,3 +147,17 @@ TEST(digi_full_path_trace_does_not_overflow)
     CHECK_EQ_INT(r, 0);
     CHECK_EQ_INT(std::count(path.begin(), path.end(), ',') + 1, 8);
 }
+
+TEST(digi_obsolete_aliases_not_repeated)
+{
+    // New-N paradigm: RELAY, plain WIDE, GATE and ECHO are obsolete; a modern digi drops them
+    setupDigi();
+    std::string path;
+    CHECK_EQ_INT(digi("LU1ABC-9>APE32A,RELAY,WIDE2-1:>obsolete 1", &path), 0);
+    CHECK_EQ_INT(digi("LU1ABC-9>APE32A,WIDE:>obsolete 2", &path), 0);
+    CHECK_EQ_INT(digi("LU1ABC-9>APE32A,GATE:>obsolete 3", &path), 0);
+    CHECK_EQ_INT(digi("LU1ABC-9>APE32A,ECHO:>obsolete 4", &path), 0);
+    // The New-N paths still go through
+    CHECK(digi("LU1ABC-9>APE32A,WIDE2-1:>new-n 1", &path) > 0);
+    CHECK_EQ_STR(path.c_str(), "LU1DIG-1*"); // last hop used up: replaced by our call
+}

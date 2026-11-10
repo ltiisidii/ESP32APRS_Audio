@@ -76,10 +76,12 @@ const char ADC_ATTEN[5][19] = {"0dB (100-950mV)", "2.5dB (100-1250mV)", "6dB (15
 
 #define SYSTEM_LEN 6
 #define SYSTEM_BIT_LEN 9
-#define PATH_LEN 17
+// Path presets: the index is what the config stores, so never reorder; add at the end.
+// 1..7 and 10..12 are obsolete (New-N paradigm, 2004-2005): the web lists them last, only when chosen.
+#define PATH_LEN 21
 const char SYSTEM_NAME[SYSTEM_LEN][20] = {"NONE", "All Count", "RF2INET", "INET2RF","DIGI","All Drop"};
 const char SYSTEM_BITS_NAME[9][20] = {"NONE", "IGATE Mode", "DIGI Mode", "WEATHER Mode","SAT Status","INET Status","VPN Status","GSM Status","FX.25 Status"};
-const char PATH_NAME[PATH_LEN][15] = {"OFF", "DST-TRACE 1", "DST-TRACE 2", "DST-TRACE 3", "DST-TRACE 4", "TRACE1-1", "TRACE2-2", "TRACE3-3", "WIDE1-1","RFONLY","RELAY","GATE","ECHO","UserDefine 1","UserDefine 2","UserDefine 3","UserDefine 4"};
+const char PATH_NAME[PATH_LEN][16] = {"OFF", "DST-TRACE 1", "DST-TRACE 2", "DST-TRACE 3", "DST-TRACE 4", "TRACE1-1", "TRACE2-2", "TRACE3-3", "WIDE1-1","RFONLY","RELAY","GATE","ECHO","UserDefine 1","UserDefine 2","UserDefine 3","UserDefine 4","WIDE2-1","WIDE2-2","WIDE1-1,WIDE2-1","WIDE1-1,WIDE2-2"};
 
 
 // global variables from main.cpp
