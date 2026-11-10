@@ -235,6 +235,12 @@ int digiProcess(AX25Msg &Packet)
                     break;
                 }
             }
+            else if (!strcmp(&Packet.rpt_list[idx].call[0], "WIDE"))
+            {
+                // Plain "WIDE" (no n-N): obsolete like RELAY, replaced by WIDEn-N. Not repeated.
+                j = 0;
+                break;
+            }
             else
             {
                 j = 2;
@@ -303,30 +309,10 @@ int digiProcess(AX25Msg &Packet)
             Packet.rpt_flags |= (1 << idx);
             break;
         }
-        else if (!strncmp(&Packet.rpt_list[idx].call[0], "RELAY", 5))
-        {
-            j = 2;
-            strcpy(&Packet.rpt_list[idx].call[0], &config.digi_mycall[0]);
-            Packet.rpt_list[idx].ssid = config.digi_ssid;
-            Packet.rpt_flags |= (1 << idx);
-            break;
-        }
-        else if (!strncmp(&Packet.rpt_list[idx].call[0], "GATE", 4))
-        {
-            j = 2;
-            strcpy(&Packet.rpt_list[idx].call[0], &config.digi_mycall[0]);
-            Packet.rpt_list[idx].ssid = config.digi_ssid;
-            Packet.rpt_flags |= (1 << idx);
-            break;
-        }
-        else if (!strncmp(&Packet.rpt_list[idx].call[0], "ECHO", 4))
-        {
-            j = 2;
-            strcpy(&Packet.rpt_list[idx].call[0], &config.digi_mycall[0]);
-            Packet.rpt_list[idx].ssid = config.digi_ssid;
-            Packet.rpt_flags |= (1 << idx);
-            break;
-        }
+        // RELAY, GATE and ECHO are no longer repeated: obsolete since the New-N paradigm
+        // (2004-2005, aprs.org/fix14439.html). RELAY was replaced by WIDE1-1; repeating it made
+        // duplicates, a digipeater cannot tell them from the ones other digis repeat. They fall
+        // to the "unknown alias" case below: not repeated.
         else if (!strcmp(&Packet.rpt_list[idx].call[0], &config.digi_mycall[0])) // Is path same callsign
         {
             ctmp = Packet.rpt_list[idx].ssid & 0x1F;

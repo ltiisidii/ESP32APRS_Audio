@@ -1818,7 +1818,7 @@ void defaultConfig()
     sprintf(config.igate_symbol, "A&");
     memset(config.igate_object, 0, sizeof(config.igate_object));
     memset(config.igate_phg, 0, sizeof(config.igate_phg));
-    config.igate_path = 8;
+    config.igate_path = 17; // WIDE2-1: fixed station
     sprintf(config.igate_comment, "");
     sprintf(config.igate_status, DEFAULT_STATUS);
     config.igate_sts_interval = 1800;
@@ -1831,7 +1831,7 @@ void defaultConfig()
     config.digi_ssid = 3;
     config.digi_timestamp = false;
     sprintf(config.digi_mycall, "NOCALL");
-    config.digi_path = 8;
+    config.digi_path = 17; // WIDE2-1
     //--Position
     config.digi_gps = false;
     config.digi_lat = DEFAULT_LAT;
@@ -1858,7 +1858,7 @@ void defaultConfig()
     config.trk_ssid = 7;
     config.trk_timestamp = false;
     sprintf(config.trk_mycall, "NOCALL");
-    config.trk_path = 2;
+    config.trk_path = 19; // WIDE1-1,WIDE2-1: mobile
 
     //--Position
     config.trk_gps = false;
@@ -1895,7 +1895,7 @@ void defaultConfig()
     // config.wx_channel = 0;
     config.wx_ssid = 13;
     sprintf(config.wx_mycall, "NOCALL");
-    config.wx_path = 8;
+    config.wx_path = 17; // WIDE2-1: fixed station
     sprintf(config.wx_comment, "WX MODE");
     memset(config.wx_object, 0, sizeof(config.wx_object));
     config.wx_gps = false;
@@ -6426,6 +6426,18 @@ String getPath(int idx)
         break;
     case 16: // UserDefine4
         ret = String(config.path[3]);
+        break;
+    case 17: // New-N presets (see PATH_NAME): fixed station
+        ret = "WIDE2-1";
+        break;
+    case 18: // fixed station, no digipeater close
+        ret = "WIDE2-2";
+        break;
+    case 19: // mobile / tracker
+        ret = "WIDE1-1,WIDE2-1";
+        break;
+    case 20: // mobile in a rural area without iGates
+        ret = "WIDE1-1,WIDE2-2";
         break;
     default:
         ret = "WIDE1-1";
