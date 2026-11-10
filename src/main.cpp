@@ -58,6 +58,7 @@
 #include "kisstcp.h"
 #include "inet2rf.h"
 #include "beacon_gap.h"
+#include "rfecho_api.h"
 
 // Demodulator task priority. Was 0 (= idle): it only ran when nothing else wanted the CPU and
 // lost packets whenever the web server (async_tcp, prio 10) or the display were busy. It sleeps
@@ -3056,6 +3057,7 @@ bool pkgTxSend()
                         }
                     }
                     status.txCount++;
+                    rfEchoOwnTx(txQueue[i].Info); // own packets on RF: did a digipeater repeat them?
                     log_d("TX->RF[%i]: %s\n", txQueue[i].length, txQueue[i].Info);
                     APRS_setPreamble(config.preamble * 100); // Send packet to RF
                     APRS_sendTNC2Pkt((uint8_t *)txQueue[i].Info, txQueue[i].length);
@@ -7557,6 +7559,7 @@ void taskAPRS(void *pvParameters)
                     newIGatePkg = true;
                     newDigiPkg = true;
                     kissTcpRxFrame(buf, size); // KISS over TCP client, if any (sent by taskNetwork)
+                    rfEchoRx(&incomingPacket, mV); // our own packet repeated by a digipeater
                     {
                         char rfCall[12];
                         snprintf(rfCall, sizeof(rfCall), incomingPacket.src.ssid ? "%s-%d" : "%s", incomingPacket.src.call, incomingPacket.src.ssid);

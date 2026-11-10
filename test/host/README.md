@@ -11,6 +11,7 @@ behaviour and point at the firmware file and line.
 | `test_modem.cpp` | `AX25.cpp`, `modem.cpp`, `fx25.cpp` | Full loopback: TNC2 text → AX.25 frame → **real modulator** → audio → **real demodulator** → frame. 1200, 300, 9600 baud and V.23, FX.25, 3 frames in one TX, 250-character info, 8-hop path, end of TX and time-out, TX abort, TX across the `millis()` wrap, oversized packets. |
 | `test_noise.cpp` | modem | Decode rate vs. white noise (reference curve below) and the 44.1 kHz WAV path. |
 | `test_config.cpp` | `config.cpp` | Atomic save: power cut at any point of the write and between the renames, corrupt file, `.bak`, JSON without keys. Uses an in-memory filesystem (`shim/FS.h`). |
+| `test_rfecho.cpp` | `rfecho.h` | Own RF echo: which digipeater repeated our packet (with or without its call, several hops), not ours, not repeated, own digi call. |
 | `test_digi.cpp` | `digirepeater.cpp` | WIDE1-1, WIDE2-2, TRACEn-N, used path, no path, Internet packets (`qA`/`TCPIP`), NOCALL, full path. |
 | `interop.sh` | modem | Interoperability with Dire Wolf in every mode, both directions (see below). Separate script: `interop.ps1`. |
 

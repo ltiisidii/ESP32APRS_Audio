@@ -41,6 +41,17 @@ pages.diag = async (main) => {
         ['Connection lost', i.net.isDrops ? '<span class="warn">' + i.net.isDrops + ' times</span>' : 'never'],
         i.net.isDropAgo !== undefined && ['Last time', fmtUptime(i.net.isDropAgo) + ' ago: ' + esc(i.net.isDropWhy)],
       ])) : '') +
+      (i.echo ? card('Own RF echo', (i.echo.tx ? rows([
+        ['Sent on RF since start', i.echo.tx],
+        ['Repeated by a digipeater', i.echo.txEchoed + ' of ' + i.echo.tx],
+        ['Last repeat', i.echo.ago !== undefined ?
+          fmtUptime(i.echo.ago) + ' ago by ' + esc(i.echo.by) + ', ' + i.echo.db + ' dBV' : 'none heard yet'],
+        i.echo.txSinceEcho >= 3 && ['Warning', '<span class="warn">no repeat for the last ' + i.echo.txSinceEcho +
+          ' transmissions: check the radio, cable and antenna, or the digipeater</span>'],
+      ]) : '<span class="muted">Nothing sent on RF yet.</span>') +
+        '<p class="muted">When a digipeater repeats a packet of this station, it is heard here: proof that the RF ' +
+        'transmission reached it, even when aprs.fi shows the Internet copy. Needs a path (WIDE1-1, WIDE2-1) and a ' +
+        'digipeater in range.</p>' + pre(i.echo.log && i.echo.log.slice().reverse(), 'No repeat heard since start'), 'wide') : '') +
       card('Internet &rarr; RF decisions',
         i.i2rLog ? pre(i.i2rLog.slice().reverse(), 'Nothing from the Internet to decide yet') :
           '<span class="muted">Off. Turn on "Internet &rarr; RF test" on the iGate page to see what would go to RF and why, without transmitting.</span>', 'wide') +

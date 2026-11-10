@@ -78,6 +78,14 @@ jobs:
           path: out/${{ matrix.env }}/
           retention-days: 14
 
+  host-tests:
+    # The firmware's portable code on a PC with AddressSanitizer + UBSan (test/host/README.md)
+    name: host tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make -C test/host
+
   release:
     name: Draft release
     needs: build

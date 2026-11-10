@@ -34,6 +34,7 @@
 #include "objects.h"
 #include "kisstcp.h"
 #include "inet2rf.h"
+#include "rfecho_api.h"
 #include "sensor.h"
 #include "wireguard_vpn.h"
 #include "esp_wifi.h"
@@ -182,6 +183,7 @@ static void apiInfo(AsyncWebServerRequest *request)
     doc["heapBlockMin"] = supervisorMinBlock();     // its lowest value since boot
     if (config.inet2rf || config.inet2rf_log)
         inet2rfLogRead(doc["i2rLog"].to<JsonArray>()); // Internet -> RF: last decisions
+    rfEchoInfo(doc["echo"].to<JsonObject>()); // own packets repeated by a digipeater
     doc["heapMin"] = ESP.getMinFreeHeap();
     doc["heapSize"] = ESP.getHeapSize();
 #ifdef BOARD_HAS_PSRAM
