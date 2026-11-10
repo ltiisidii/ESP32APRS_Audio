@@ -29,10 +29,17 @@ pages.diag = async (main) => {
       ]) + '<h3>Last setup commands and answers</h3>' + pre(rlog, 'No command sent to the module since start'), 'wide') +
       (i.i2c ? card('I2C 0 (display)', rows([
         ['Bus', i.i2c.en ? 'on, SDA ' + i.i2c.sda + ' / SCL ' + i.i2c.scl : 'off'],
-        ['Display', i.i2c.display ? 'enabled' : 'off'],
+        ['Display', !i.i2c.display ? 'off' : i.i2c.driver === false ?
+          '<span class="bad">enabled, but this firmware has no display driver: flash a build with a display (SH1106 or SSD1306)</span>' : 'enabled'],
         i.i2c.en && ['Found at start', i.i2c.found.length ?
           i.i2c.found.map(a => '0x' + a.toString(16).toUpperCase().padStart(2, '0') + (a === 0x3C || a === 0x3D ? ' (display)' : '')).join(', ') :
           '<span class="bad">nothing: check wiring and power</span>'],
+      ])) : '') +
+      (i.net ? card('APRS-IS', rows([
+        ['Now', i.net.aprsis ? '<span class="ok">connected</span> to ' + esc(i.net.aprsHost) : '<span class="bad">not connected</span>'],
+        ['Logins since start', i.net.isConnects],
+        ['Connection lost', i.net.isDrops ? '<span class="warn">' + i.net.isDrops + ' times</span>' : 'never'],
+        i.net.isDropAgo !== undefined && ['Last time', fmtUptime(i.net.isDropAgo) + ' ago: ' + esc(i.net.isDropWhy)],
       ])) : '') +
       card('Internet &rarr; RF decisions',
         i.i2rLog ? pre(i.i2rLog.slice().reverse(), 'Nothing from the Internet to decide yet') :

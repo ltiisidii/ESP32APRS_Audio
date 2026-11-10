@@ -6932,6 +6932,25 @@ void taskSerial(void *pvParameters)
 
 long timeSlot;
 uint64_t iGatetickInterval;
+uint64_t igateLastPos = 0; // when the iGate last sent its position, 0 = not yet since start
+
+// APRS-IS connection history for the Diagnostics page (webapi.cpp)
+uint32_t aprsIsConnects = 0;        // successful logins since start
+uint32_t aprsIsDrops = 0;           // times an established connection was lost or closed
+uint64_t aprsIsLastDropMs = 0;      // millis64() of the last one, 0 = none
+const char *aprsIsLastDropWhy = ""; // and why
+static bool aprsIsUp = false;       // logged in and not yet seen lost
+
+// An established APRS-IS connection ends: count it once, with the reason
+void aprsIsNoteDrop(const char *why)
+{
+    if (!aprsIsUp)
+        return;
+    aprsIsUp = false;
+    aprsIsDrops++;
+    aprsIsLastDropMs = millis64();
+    aprsIsLastDropWhy = why;
+}
 uint64_t WxInterval;
 bool initInterval = true;
 int trkTlmInvCount = 0;
@@ -6949,7 +6968,8 @@ void taskAPRS(void *pvParameters)
     uint64_t digiSTSInterval = 0;
     uint64_t trkSTSInterval = 0;
     // When each station last sent its position (0 = not yet): its status keeps 60 s away
-    uint64_t igateLastPos = 0, digiLastPos = 0, trkLastPos = 0;
+    // (the iGate one is global: the APRS-IS reconnect reads it too)
+    uint64_t digiLastPos = 0, trkLastPos = 0;
 
     uint16_t type = 0;
     bool newIGatePkg = false;
@@ -9171,13 +9191,21 @@ void taskNetwork(void *pvParameters)
             {
                 if (aprsClient.connected() == false)
                 {
+                    aprsIsNoteDrop("closed by the server or the network");
                     if (millis64() > waitISRetry)
                     {
                         waitISRetry = millis64() + 30000; // Retry connect 30Sec
                         if (APRSConnect())
                         {
                             lastIsRx = millis();
-                            if (config.igate_bcn)
+                            aprsIsUp = true;
+                            aprsIsConnects++;
+                            // Position again soon only if APRS-IS missed the last one: none yet, or
+                            // sent while the connection was down and already dropped from the TX
+                            // queue (it keeps an Internet copy 60 s). Before, every reconnect sent
+                            // one and restarted the interval (LU4YYY-10: 6 extra on RF in a morning).
+                            if (config.igate_bcn && config.igate_loc2inet &&
+                                (igateLastPos == 0 || (igateLastPos >= aprsIsLastDropMs && millis64() - igateLastPos > 60000)))
                             {
                                 iGatetickInterval = millis64() + 10000; // send position after 10sec
                             }
@@ -9188,6 +9216,7 @@ void taskNetwork(void *pvParameters)
                 {
                     // Half-open TCP (NAT/4G): connected() stays true but nothing arrives
                     log_d("APRS-IS no data for %d s, reconnecting", APRS_IS_RX_TIMEOUT / 1000);
+                    aprsIsNoteDrop("no data from the server for 120 s");
                     aprsIsStop();
                     waitISRetry = millis64() + 5000;
                 }

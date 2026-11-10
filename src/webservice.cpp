@@ -45,6 +45,7 @@ extern pppType pppStatus;
 
 extern uint64_t waitISRetry;
 extern volatile int8_t adcEn;
+static AsyncWebServerRequest *otaOwner = nullptr; // the /update upload writing the flash now
 extern volatile int8_t dacEn;
 extern unsigned long upTimeStamp;
 extern double VBat;
@@ -589,12 +590,24 @@ void webService()
 			if (!index)
 			{
 				log_d("Update Start: %s\n", filename.c_str());
-				if (!Update.begin((ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000))
+				if (otaOwner || !Update.begin((ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000))
 				{
-					Update.printError(Serial);
+					Update.printError(Serial); // or another upload is running: this one writes nothing
 				}
 				else
 				{
+					otaOwner = request;
+					// Upload cut halfway (browser closed, WiFi lost): before, the update stayed open
+					// and RX audio paused, the station deaf until the supervisor restarted it (5 min),
+					// and every retry failed. Now the update is dropped and RX resumes at once.
+					request->onDisconnect([request]()
+										  {
+						if (otaOwner != request)
+							return;
+						otaOwner = nullptr;
+						Update.abort();
+						adcEn = 1;
+						log_d("Update aborted: upload cut"); });
 					adcEn = -1;
 					delay(500);
 					// disableLoopWDT();
@@ -608,6 +621,8 @@ void webService()
 					//  vTaskSuspend(taskSensorHandle);
 				}
 			}
+			if (otaOwner != request)
+				return;
 			if (!Update.hasError())
 			{
 				if (Update.write(data, len) != len)
@@ -626,6 +641,8 @@ void webService()
 				else
 				{
 					Update.printError(Serial);
+					otaOwner = nullptr; // bad image: RX back on, a new upload may start
+					adcEn = 1;
 				}
 			}
 		});
