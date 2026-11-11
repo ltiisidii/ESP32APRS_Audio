@@ -216,19 +216,67 @@ bool sensorUpdate(int i, double val)
     return true;
 }
 
+#if CONFIG_IDF_TARGET_ESP32
+extern "C" uint8_t temprature_sens_read(); // undocumented sensor of the classic ESP32 (degF, uncalibrated)
+uint8_t ModemDcdState(void);
+#endif
+
+static bool cpuTempChip(float *out)
+{
+#if CONFIG_IDF_TARGET_ESP32
+    // The classic ESP32 sensor is undocumented and has no IDF driver, so ESPCPUTemp gives up on it.
+    // Read it directly, at most once a minute and never while a packet is coming in: it powers the
+    // same SAR ADC block that samples the RX audio.
+    static float last = NAN;
+    static uint32_t lastMs = 0;
+    static bool alive = false; // on some chips it does not work and always gives 128 (53.3 degC)
+    uint32_t now = millis();
+    if ((isnan(last) || now - lastMs >= 60000) && !ModemDcdState())
+    {
+        uint8_t raw = temprature_sens_read();
+        lastMs = now;
+        if (raw != 128)
+            alive = true;
+        float c = (raw - 32) / 1.8f;
+        last = isnan(last) ? c : last * 0.75f + c * 0.25f; // average of the last minutes: it moves in 0.55 degC steps
+    }
+    if (!alive || isnan(last))
+        return false;
+    *out = last;
+    return true;
+#else
+    ESPCPUTemp tempSensor;
+    if (!tempSensor.begin())
+        return false;
+    *out = tempSensor.getTemp();
+    return !isnan(*out);
+#endif
+}
+
+bool cpuTemp(float *chip, float *shown)
+{
+    float c;
+    if (!cpuTempChip(&c))
+        return false;
+    float gain = config.cpu_temp_gain != 0.0f ? config.cpu_temp_gain : 1.0f;
+    if (chip)
+        *chip = c;
+    if (shown)
+        *shown = c * gain + config.cpu_temp_offset;
+    return true;
+}
+
 bool getCPU_TEMP(uint8_t port)
 {
-    ESPCPUTemp tempSensor;
-
     for (int i = 0; i < SENSOR_NUMBER; i++)
     {
         if (config.sensor[i].type == SENSOR_TEMPERATURE)
         {
             if(!config.sensor[i].enable) continue;
             if (config.sensor[i].port == port){
-                if (tempSensor.begin())
+                float temperature;
+                if (cpuTemp(nullptr, &temperature))
                 {
-                    float temperature = tempSensor.getTemp();
                     sensorUpdate(i, (double)temperature);
                 }
                 else

@@ -438,6 +438,8 @@ void configToJson(const Configuration &config, JsonDocument &doc)
     doc["pwrSleepAct"] = config.pwr_sleep_activate;
     doc["pwrIO"] = config.pwr_gpio;
     doc["pwrIOAct"] = config.pwr_active;
+    doc["cpuTempGain"] = config.cpu_temp_gain;
+    doc["cpuTempOffset"] = config.cpu_temp_offset;
 
 #ifdef BLUETOOTH
         doc["btSlave"] = config.bt_slave;
@@ -1006,6 +1008,8 @@ void configFromJson(JsonDocument &doc, Configuration &config)
     config.pwr_sleep_activate = doc["pwrSleepAct"];
     config.pwr_gpio = doc["pwrIO"];
     config.pwr_active = doc["pwrIOAct"];
+    config.cpu_temp_gain = doc["cpuTempGain"] | 1.0f;
+    config.cpu_temp_offset = doc["cpuTempOffset"] | CPU_TEMP_AIR_OFFSET;
 
 #ifdef BLUETOOTH
     config.bt_slave = doc["btSlave"];

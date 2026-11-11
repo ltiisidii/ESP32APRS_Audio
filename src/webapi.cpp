@@ -165,9 +165,12 @@ static void apiInfo(AsyncWebServerRequest *request)
     doc["host"] = config.host_name;
     doc["chip"] = ESP.getChipModel();
     doc["cpuMhz"] = ESP.getCpuFreqMHz();
-    ESPCPUTemp tempSensor;
-    if (tempSensor.begin())
-        doc["temp"] = serialized(String(tempSensor.getTemp(), 1));
+    float tChip, tShown;
+    if (cpuTemp(&tChip, &tShown))
+    {
+        doc["temp"] = serialized(String(tShown, 1));
+        doc["tempChip"] = serialized(String(tChip, 1)); // as read, before the correction from the settings
+    }
     if (VBat_Flag)
         doc["vbat"] = serialized(String(VBat, 2));
     doc["uptime"] = (uint32_t)(millis64() / 1000);
