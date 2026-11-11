@@ -240,10 +240,10 @@ pages.modules = (main) => formPage(main, (cfg, meta) => {
     {
       title: 'CPU temperature',
       fields: [
-        { k: 'cpuTempGain', l: 'Gain', t: 'num', step: 'any', w: 8, h: '1 = none. Shown = chip &times; gain + offset' },
+        { k: 'cpuTempGain', l: 'Gain', t: 'num', step: 'any', w: 8, h: 'Air = chip &times; gain + offset. 1 = none' },
         { k: 'cpuTempOffset', l: 'Offset', t: 'num', step: 'any', w: 8, unit: '&deg;C',
-          h: 'The chip runs hotter than the air around it. Measure the air (or the box) with a thermometer, ' +
-            'then offset = thermometer &minus; chip. Applies at once, no reboot.' },
+          h: 'The chip runs hotter than the air around it. &minus;30 is the average of an ESP32 with WiFi on (about &plusmn;10 &deg;C). ' +
+            'To calibrate: measure the air (or the box) with a thermometer, offset = thermometer &minus; chip. Applies at once, no reboot.' },
       ],
     },
     {

@@ -521,10 +521,14 @@ typedef struct Config_Struct
 	bool inet2rf_log;     // take the decisions and log them, transmit nothing (test)
 	uint8_t inet2rf_rate; // packets per minute at most (0 = 4)
 
-	// CPU temperature correction (src/sensor.cpp cpuTemp): shown = chip * gain + offset
+	// Air temperature estimated from the CPU one (src/sensor.cpp cpuTemp): air = chip * gain + offset
 	float cpu_temp_gain;   // 1 = none
-	float cpu_temp_offset; // degC
+	float cpu_temp_offset; // degC (default CPU_TEMP_AIR_OFFSET)
 } Configuration;
+
+// An ESP32 with WiFi on runs about 25..35 degC above the air around it: the average, for boards
+// nobody calibrated against a thermometer (about +-10 degC)
+#define CPU_TEMP_AIR_OFFSET -30.0f
 
 // Factory defaults (region: Argentina). Used by defaultConfig() and as fallbacks
 // when a key is missing from the saved configuration.

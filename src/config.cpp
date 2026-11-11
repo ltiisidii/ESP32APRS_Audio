@@ -1009,7 +1009,7 @@ void configFromJson(JsonDocument &doc, Configuration &config)
     config.pwr_gpio = doc["pwrIO"];
     config.pwr_active = doc["pwrIOAct"];
     config.cpu_temp_gain = doc["cpuTempGain"] | 1.0f;
-    config.cpu_temp_offset = doc["cpuTempOffset"] | 0.0f;
+    config.cpu_temp_offset = doc["cpuTempOffset"] | CPU_TEMP_AIR_OFFSET;
 
 #ifdef BLUETOOTH
     config.bt_slave = doc["btSlave"];

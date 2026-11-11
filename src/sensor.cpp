@@ -237,7 +237,8 @@ static bool cpuTempChip(float *out)
         lastMs = now;
         if (raw != 128)
             alive = true;
-        last = (raw - 32) / 1.8f;
+        float c = (raw - 32) / 1.8f;
+        last = isnan(last) ? c : last * 0.75f + c * 0.25f; // average of the last minutes: it moves in 0.55 degC steps
     }
     if (!alive || isnan(last))
         return false;
