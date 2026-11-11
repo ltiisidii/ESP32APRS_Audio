@@ -109,4 +109,8 @@ void dispSensor(int i);
 void taskSensor(void *pvParameters);
 void sensorInit(bool resetAll);
 void cleanupSensors(); // Memory leak fix: cleanup dynamically allocated sensor objects
+
+// CPU temperature. False when the chip has no working sensor. *chip = as read, *shown = with
+// the correction from the settings (config.cpu_temp_gain / cpu_temp_offset).
+bool cpuTemp(float *chip, float *shown);
 #endif

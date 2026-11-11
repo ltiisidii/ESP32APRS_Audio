@@ -2214,6 +2214,8 @@ config.oled_enable = true;
     config.pwr_mode = MODE_A;        // A=Continue,B=Wait for receive,C=Send and sleep
     config.pwr_sleep_interval = 600; // sec
     config.pwr_stanby_delay = 30;   // sec
+    config.cpu_temp_gain = 1.0f;    // CPU temperature shown as read (no correction)
+    config.cpu_temp_offset = 0.0f;
     config.pwr_sleep_activate = ACTIVATE_TRACKER | ACTIVATE_WIFI;
     config.pwr_gpio = -1;
     config.pwr_active = 1;

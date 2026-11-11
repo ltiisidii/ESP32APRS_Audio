@@ -520,6 +520,10 @@ typedef struct Config_Struct
 	// Internet -> RF rules (src/inet2rf.cpp)
 	bool inet2rf_log;     // take the decisions and log them, transmit nothing (test)
 	uint8_t inet2rf_rate; // packets per minute at most (0 = 4)
+
+	// CPU temperature correction (src/sensor.cpp cpuTemp): shown = chip * gain + offset
+	float cpu_temp_gain;   // 1 = none
+	float cpu_temp_offset; // degC
 } Configuration;
 
 // Factory defaults (region: Argentina). Used by defaultConfig() and as fallbacks

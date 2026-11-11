@@ -238,6 +238,15 @@ pages.modules = (main) => formPage(main, (cfg, meta) => {
     },
     i2c('i2c', 'I2C 0 (display)'), i2c('i2c1', 'I2C 1'), counter(0), counter(1),
     {
+      title: 'CPU temperature',
+      fields: [
+        { k: 'cpuTempGain', l: 'Gain', t: 'num', step: 'any', w: 8, h: '1 = none. Shown = chip &times; gain + offset' },
+        { k: 'cpuTempOffset', l: 'Offset', t: 'num', step: 'any', w: 8, unit: '&deg;C',
+          h: 'The chip runs hotter than the air around it. Measure the air (or the box) with a thermometer, ' +
+            'then offset = thermometer &minus; chip. Applies at once, no reboot.' },
+      ],
+    },
+    {
       title: 'GNSS',
       fields: [
         { k: 'gnssEn', l: 'Enable', t: 'sw' },
@@ -304,7 +313,7 @@ pages.modules = (main) => formPage(main, (cfg, meta) => {
   }
   // Most used first: the radio wiring, then GPS and serial ports, buses, inputs, external devices
   const ORDER = ['Radio wiring', 'GNSS', 'UART0', 'UART1', 'UART2', 'I2C 0 (display)', 'I2C 1', '1-Wire bus', 'Counter 0', 'Counter 1',
-    'Modbus', 'External TNC', 'KISS over TCP', 'Cellular modem (PPPoS)', 'AT command channels'];
+    'Modbus', 'External TNC', 'KISS over TCP', 'Cellular modem (PPPoS)', 'AT command channels', 'CPU temperature'];
   sections.sort((x, y) => ORDER.indexOf(x.title) - ORDER.indexOf(y.title));
   return {
     title: 'Modules',

@@ -202,7 +202,9 @@ async function dashboard(main) {
       '<div class="tiles">' +
       tile('Uptime', fmtUptime(i.uptime)) +
       tile('RAM free', heapPct + '%', heapPct < 15 ? 'bad' : heapPct < 30 ? 'warn' : '') +
-      tile('CPU temp', i.temp !== undefined ? i.temp + '&deg;C' : 'N/A') +
+      (i.temp !== undefined && i.temp !== i.tempChip
+        ? tile('Temperature', i.temp + '&deg;C <small class="muted">chip ' + i.tempChip + '</small>') // corrected in Modules
+        : tile('CPU temp', i.temp !== undefined ? i.temp + '&deg;C' : 'N/A')) +
       tile('WiFi', w.sta ? w.rssi + ' dBm' : 'AP only', w.sta ? '' : 'warn') +
       tile('APRS-IS', n.aprsis ? 'connected' : i.modes.igate ? 'down' : 'off', n.aprsis ? 'ok' : i.modes.igate ? 'bad' : '') +
       tile('Packets RX / TX', s.pkt + ' / ' + s.tx) +
