@@ -171,6 +171,18 @@ static void apiInfo(AsyncWebServerRequest *request)
         doc["temp"] = serialized(String(tShown, 1));
         doc["tempChip"] = serialized(String(tChip, 1)); // as read, before the correction from the settings
     }
+    {
+        const CpuTempDiag &t = cpuTempDiag();
+        JsonObject td = doc["tempDiag"].to<JsonObject>();
+        td["state"] = t.state == CPU_TEMP_OK ? "ok" : t.state == CPU_TEMP_UNAVAILABLE ? "unavailable" : "pending";
+        if (t.raw >= 0)
+            td["raw"] = t.raw;
+        if (t.rawCore >= 0)
+            td["rawCore"] = t.rawCore;
+        td["reads"] = t.reads;
+        td["invalid"] = t.invalid;
+        td["skipped"] = t.skipped;
+    }
     if (VBat_Flag)
         doc["vbat"] = serialized(String(VBat, 2));
     doc["uptime"] = (uint32_t)(millis64() / 1000);

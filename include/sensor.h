@@ -113,4 +113,22 @@ void cleanupSensors(); // Memory leak fix: cleanup dynamically allocated sensor 
 // CPU temperature. False when the chip has no working sensor. *chip = as read, *shown = with
 // the correction from the settings (config.cpu_temp_gain / cpu_temp_offset).
 bool cpuTemp(float *chip, float *shown);
+
+// What the CPU temperature sensor has done since start (Diagnostics)
+enum CpuTempState : uint8_t
+{
+    CPU_TEMP_PENDING,     // not enough tries yet
+    CPU_TEMP_OK,          // gives readings
+    CPU_TEMP_UNAVAILABLE, // no reading on this chip (classic ESP32: always 128)
+};
+struct CpuTempDiag
+{
+    CpuTempState state;
+    int16_t raw;     // last raw value read by registers (classic ESP32, degF; 128 = no reading), -1 = none
+    int16_t rawCore; // same read through the core's temprature_sens_read(), for comparison
+    uint32_t reads;
+    uint32_t invalid; // reads that gave 128 both ways
+    uint32_t skipped; // tries put off because a packet was coming in
+};
+const CpuTempDiag &cpuTempDiag();
 #endif

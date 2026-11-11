@@ -101,6 +101,38 @@ taken on an ESP32DR SA868 board receiving the local APRS network:
 
 Decoding performance (WA8LMF TNC Test CD and Dire Wolf comparison) is in [Testing](#testing).
 
+## CPU temperature
+
+> [!IMPORTANT]
+> **On the classic ESP32 the CPU temperature may not be available, and that is the chip, not a fault.**
+> Whether it works can only be found out on each board: the firmware tries, and shows the result.
+
+The dashboard shows the temperature of the ESP32 chip and an estimated air temperature (`air ~`).
+What you see depends on the chip, not on the board model:
+
+| Chip | Module examples | CPU temperature |
+|---|---|---|
+| **ESP32** (classic: D0WD, D0WDQ6, D0WD-V3) | ESP32-WROOM-32, -32D, -32E, -32U, ESP32DR, DevKit v1 | **Some chips only.** The sensor is undocumented (Espressif removed it from the datasheet). Some chips give readings, others never do, even two of the same module. |
+| **ESP32-S3, C3, C6** | ESP32-S3-WROOM-1, C3 SuperMini, T-TWR Plus | **Yes.** Documented sensor. |
+
+On the dashboard:
+
+- **`62.3°C air ~32°C`**: the sensor works. The first value is the chip, the second the air estimate.
+- **`reading...`**: the first minute after start, while the firmware tries.
+- **`not available on this board`**: after 5 tries the sensor of this chip gave no reading (always the raw value 128).
+  It keeps trying every minute.
+
+**Diagnostics > CPU temperature sensor** shows the evidence: the chip model, how many reads and how many
+without a reading, and the last raw value.
+
+**What the numbers mean.** The sensor measures the chip, not the room. An ESP32 with WiFi on runs 25..35 °C
+above the air, so the air estimate takes 30 °C off. It varies a lot between chips (from 10 to 40 °C above the air),
+so the estimate is rough. For the real value, measure the air (or inside the box) with a thermometer, and set
+**Modules > CPU temperature**: offset = thermometer − chip.
+
+**For a real temperature reading** (box, outdoors, weather), use an external sensor in **Sensors**: DS18B20 (1-Wire),
+BME280/BMP280, SHT or Si7021 (I2C). They are accurate (about ±0.5 °C) and work on every board.
+
 ## ESP32DR_SA868
 Share project [here](https://oshwlab.com/APRSTH/esp32sa818) \
 Schematic [here](doc/ESP32DR_SA868/ESP32DR_SA868_sch.pdf) \

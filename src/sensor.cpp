@@ -216,39 +216,98 @@ bool sensorUpdate(int i, double val)
     return true;
 }
 
+static CpuTempDiag cpuDiag = {CPU_TEMP_PENDING, -1, -1, 0, 0, 0};
+
+const CpuTempDiag &cpuTempDiag()
+{
+    return cpuDiag;
+}
+
 #if CONFIG_IDF_TARGET_ESP32
-extern "C" uint8_t temprature_sens_read(); // undocumented sensor of the classic ESP32 (degF, uncalibrated)
+#include "soc/sens_reg.h"
+#include "esp_rom_sys.h"
+extern "C" uint8_t temprature_sens_read(); // the core's way (librtc): does not power the SAR block itself
 uint8_t ModemDcdState(void);
+
+// Classic ESP32 sensor read by registers (esp-idf issue #732, as in the softub project). The sensor only
+// works with the SAR block powered: temprature_sens_read() does not force it on, so with WiFi off or the
+// SAR under the ADC controller (our RX audio) it gives 128 = no reading. Force it on, read, then put the
+// power setting back as it was, so the RX audio ADC is left as we found it.
+static uint8_t tsensReadRegs()
+{
+    uint32_t xpd = GET_PERI_REG_BITS2(SENS_SAR_MEAS_WAIT2_REG, SENS_FORCE_XPD_SAR, SENS_FORCE_XPD_SAR_S);
+    SET_PERI_REG_BITS(SENS_SAR_MEAS_WAIT2_REG, SENS_FORCE_XPD_SAR, 3, SENS_FORCE_XPD_SAR_S);
+    SET_PERI_REG_BITS(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_CLK_DIV, 10, SENS_TSENS_CLK_DIV_S);
+    CLEAR_PERI_REG_MASK(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_POWER_UP);
+    CLEAR_PERI_REG_MASK(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_DUMP_OUT);
+    SET_PERI_REG_MASK(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_POWER_UP_FORCE);
+    SET_PERI_REG_MASK(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_POWER_UP);
+    esp_rom_delay_us(100);
+    SET_PERI_REG_MASK(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_DUMP_OUT);
+    for (int i = 0; i < 100 && !(READ_PERI_REG(SENS_SAR_SLAVE_ADDR3_REG) & SENS_TSENS_RDY_OUT); i++)
+        esp_rom_delay_us(5);
+    uint8_t raw = GET_PERI_REG_BITS2(SENS_SAR_SLAVE_ADDR3_REG, SENS_TSENS_OUT, SENS_TSENS_OUT_S);
+    CLEAR_PERI_REG_MASK(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_DUMP_OUT | SENS_TSENS_POWER_UP | SENS_TSENS_POWER_UP_FORCE);
+    SET_PERI_REG_BITS(SENS_SAR_MEAS_WAIT2_REG, SENS_FORCE_XPD_SAR, xpd, SENS_FORCE_XPD_SAR_S);
+    return raw;
+}
 #endif
 
 static bool cpuTempChip(float *out)
 {
 #if CONFIG_IDF_TARGET_ESP32
     // The classic ESP32 sensor is undocumented and has no IDF driver, so ESPCPUTemp gives up on it.
-    // Read it directly, at most once a minute and never while a packet is coming in: it powers the
-    // same SAR ADC block that samples the RX audio.
+    // Read it at most once a minute (every 10 s for the first tries) and not while a packet is coming
+    // in, as it powers the SAR block that samples the RX audio (after 5 skips in a row it reads anyway).
+    // 128 (53.3 degC) = no reading: some chips never give one; then the board says "not available".
     static float last = NAN;
     static uint32_t lastMs = 0;
-    static bool alive = false; // on some chips it does not work and always gives 128 (53.3 degC)
+    static uint8_t skippedRow = 0;
     uint32_t now = millis();
-    if ((isnan(last) || now - lastMs >= 60000) && !ModemDcdState())
+    uint32_t every = cpuDiag.state == CPU_TEMP_PENDING ? 10000 : 60000;
+    if (cpuDiag.reads == 0 || now - lastMs >= every)
     {
-        uint8_t raw = temprature_sens_read();
-        lastMs = now;
-        if (raw != 128)
-            alive = true;
-        float c = (raw - 32) / 1.8f;
-        last = isnan(last) ? c : last * 0.75f + c * 0.25f; // average of the last minutes: it moves in 0.55 degC steps
+        if (ModemDcdState() && skippedRow < 5)
+        {
+            skippedRow++;
+            cpuDiag.skipped++;
+        }
+        else
+        {
+            skippedRow = 0;
+            lastMs = now;
+            uint8_t regs = tsensReadRegs();
+            uint8_t rom = temprature_sens_read();
+            cpuDiag.raw = regs;
+            cpuDiag.rawCore = rom;
+            cpuDiag.reads++;
+            uint8_t raw = regs != 128 ? regs : rom;
+            if (raw == 128)
+                cpuDiag.invalid++;
+            else
+            {
+                cpuDiag.state = CPU_TEMP_OK;
+                float c = (raw - 32) / 1.8f;
+                last = isnan(last) ? c : last * 0.75f + c * 0.25f; // average of the last minutes: it moves in 0.55 degC steps
+            }
+            if (cpuDiag.state == CPU_TEMP_PENDING && cpuDiag.reads >= 5)
+                cpuDiag.state = CPU_TEMP_UNAVAILABLE; // still retried every minute: becomes OK at the first reading
+        }
     }
-    if (!alive || isnan(last))
+    if (isnan(last))
         return false;
     *out = last;
     return true;
 #else
     ESPCPUTemp tempSensor;
     if (!tempSensor.begin())
+    {
+        cpuDiag.state = CPU_TEMP_UNAVAILABLE;
         return false;
+    }
     *out = tempSensor.getTemp();
+    cpuDiag.reads++;
+    cpuDiag.state = isnan(*out) ? CPU_TEMP_UNAVAILABLE : CPU_TEMP_OK;
     return !isnan(*out);
 #endif
 }

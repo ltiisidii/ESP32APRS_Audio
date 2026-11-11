@@ -35,6 +35,15 @@ pages.diag = async (main) => {
           i.i2c.found.map(a => '0x' + a.toString(16).toUpperCase().padStart(2, '0') + (a === 0x3C || a === 0x3D ? ' (display)' : '')).join(', ') :
           '<span class="bad">nothing: check wiring and power</span>'],
       ])) : '') +
+      (i.tempDiag ? card('CPU temperature sensor', rows([
+        ['Chip', esc(i.chip || '-')],
+        ['Result', i.tempDiag.state === 'ok' ? '<span class="ok">gives readings</span>' + (i.tempChip !== undefined ? ': ' + i.tempChip + '&deg;C' : '') :
+          i.tempDiag.state === 'unavailable' ? '<span class="warn">no reading on this chip</span>' : 'still trying'],
+        ['Reads', i.tempDiag.reads + (i.tempDiag.invalid ? ' (' + i.tempDiag.invalid + ' without a reading)' : '')],
+        i.tempDiag.raw !== undefined && ['Last raw value', i.tempDiag.raw + ' by registers, ' + i.tempDiag.rawCore + ' by the core function (128 = no reading)'],
+        i.tempDiag.skipped && ['Put off', i.tempDiag.skipped + ' times, a packet was coming in'],
+      ]) + '<p class="muted">Classic ESP32: the sensor is undocumented and works on some chips only. ' +
+        'ESP32-S3/C3/C6: documented sensor. See README, CPU temperature.</p>') : '') +
       (i.net ? card('APRS-IS', rows([
         ['Now', i.net.aprsis ? '<span class="ok">connected</span> to ' + esc(i.net.aprsHost) : '<span class="bad">not connected</span>'],
         ['Logins since start', i.net.isConnects],
