@@ -527,7 +527,8 @@ typedef struct Config_Struct
 } Configuration;
 
 // An ESP32 with WiFi on runs about 25..35 degC above the air around it: the average, for boards
-// nobody calibrated against a thermometer (about +-10 degC)
+// nobody calibrated against a thermometer. Chips differ a lot (same board model: from
+// 10 to 40 degC above the air), so it is only a rough guess until calibrated
 #define CPU_TEMP_AIR_OFFSET -30.0f
 
 // Factory defaults (region: Argentina). Used by defaultConfig() and as fallbacks
