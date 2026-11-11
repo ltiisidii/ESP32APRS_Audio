@@ -6,4 +6,3 @@
 test/host/build
 include/web_assets.h
 src/idf_component.yml*
-.playwright-mcp
